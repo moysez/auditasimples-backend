@@ -5,6 +5,18 @@ from .db import Base, engine
 from .auth import login_router
 from .routers import clients, uploads, analyses, reports
 
+origins = [
+    "https://auditasimples.io",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app = FastAPI(title="AuditaSimples API", version="0.2.0")
 
 origins = [settings.FRONTEND_ORIGIN] if settings.FRONTEND_ORIGIN else ["*"]
