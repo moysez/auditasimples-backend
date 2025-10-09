@@ -1,6 +1,3 @@
-# services/storage.py
-async def save_zip_in_db(file) -> bytes:
-    """
-    Lê e retorna o conteúdo binário do arquivo ZIP enviado.
-    """
-    return await file.read()
+git add .
+git commit -m "fix: corrigida importação de get_zip_bytes"
+git push
