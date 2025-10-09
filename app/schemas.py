@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, Any, Dict, List
+from datetime import datetime
 
 class ClientCreate(BaseModel):
     name: str
@@ -16,9 +17,9 @@ class UploadOut(BaseModel):
     id: int
     client_id: int
     filename: str
-    storage_key: str
+    created_at: datetime
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 class AnalysisOut(BaseModel):
     id: int
