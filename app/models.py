@@ -15,15 +15,18 @@ class Client(Base):
     reports = relationship("Report", back_populates="client")
 
 class Upload(Base):
-    __tablename__ = "uploads"
-    id = Column(Integer, primary_key=True, index=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
-    filename = Column(String(255), nullable=False)
-    storage_key = Column(String(500), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    client = relationship("Client", back_populates="uploads")
-
+    from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, LargeBinary
+    from datetime import datetime
+    from .db import Base
+    
+    class Upload(Base):
+        __tablename__ = "uploads"
+        id = Column(Integer, primary_key=True)
+        client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+        filename = Column(String(255), nullable=False)
+        file_data = Column(LargeBinary, nullable=False)  # <-- salvamos o arquivo aqui
+        created_at = Column(DateTime, default=datetime.utcnow)
+        
 class AnalysisJob(Base):
     __tablename__ = "analyses"
     id = Column(Integer, primary_key=True, index=True)
