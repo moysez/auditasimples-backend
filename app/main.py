@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Importações dos módulos internos do projeto
+# Importações dos módulos internos
 from .config import settings
 from .db import Base, engine
 from .auth import login_router
-from .routers import clients, uploads, analyses, reports, dashboard  # 👈 ADICIONE dashboard aqui
+from .routers import clients, uploads, analyses, reports, dashboard
 
 # -----------------------------
 # 1. Criação da aplicação
@@ -19,15 +19,16 @@ app = FastAPI(
 # 2. Configuração de CORS
 # -----------------------------
 origins = [
-    "https://auditasimples.io",  # domínio do seu frontend
+    "https://auditasimples.io",
+    "https://www.auditasimples.io",  # 👈 Adicione o www se o front usar
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],   # 👈 importante para OPTIONS
+    allow_headers=["*"],   # 👈 libera Content-Type, Authorization etc.
 )
 
 # -----------------------------
@@ -43,7 +44,7 @@ app.include_router(clients.router, prefix="/api")
 app.include_router(uploads.router, prefix="/api")
 app.include_router(analyses.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
-app.include_router(dashboard.router, prefix="/api")  # 👈 ADICIONADO AQUI
+app.include_router(dashboard.router, prefix="/api")
 
 # -----------------------------
 # 5. Health check
