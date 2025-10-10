@@ -9,7 +9,7 @@ from .db import Base, engine, get_session
 from .auth import router as auth_router
 
 # 📊 Rotas principais
-from .routers import clients, company, uploads  # 👈 login removido aqui se não existir
+from .routers import clients, company, uploads, dashboard  # 👈 login removido aqui se não existir
 
 app = FastAPI(
     title="AuditaSimples API",
@@ -41,6 +41,7 @@ api.include_router(clients.router)
 api.include_router(company.router)
 api.include_router(uploads.router)
 api.include_router(auth_router)
+api.include_router(dashboard.router)
 
 @app.get("/health")
 def health():
