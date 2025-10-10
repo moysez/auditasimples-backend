@@ -4,66 +4,60 @@ from fastapi.middleware.cors import CORSMiddleware
 # 📦 Importações internas
 from .config import settings
 from .db import Base, engine
-from .auth import login_router
-from .routers import clients, uploads, analyses, reports, dashboard
+from .models.user import User
+from .models.company import Company
+from .models.upload import Upload
+from .models.report import Report
+from .routers import auth, company, uploads, dashboard, reports
 
 # -----------------------------
 # 1. Criação da aplicação
 # -----------------------------
 app = FastAPI(
     title="AuditaSimples API",
-    version="0.2.0"
+    version="1.0.0"
 )
 
 # -----------------------------
 # 2. Configuração de CORS
 # -----------------------------
-# ⚠️ Domínios que podem chamar a API — devem bater exatamente com o Origin do navegador
 origins = [
     "https://auditasimples.io",
-    "https://www.auditasimples.io",  # se for acessado com www
-    "http://localhost:5500",         # ambiente local opcional
+    "https://www.auditasimples.io",
+    "http://localhost:5500",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins,      # Pode trocar por ["*"] se for liberar geral
     allow_credentials=True,
-    allow_methods=["*"],   # permite GET, POST, PUT, DELETE, etc.
-    allow_headers=["*"],   # permite Authorization, Content-Type, etc.
+    allow_methods=["*"],
+    allow_headers=["*"],
     expose_headers=["*"],
-    max_age=3600           # cache do preflight
+    max_age=3600
 )
 
 # -----------------------------
 # 3. Inicialização do banco de dados
 # -----------------------------
-# 🔹 Cria as tabelas automaticamente (caso não existam)
 Base.metadata.create_all(bind=engine)
 
 # -----------------------------
 # 4. Registro das rotas
 # -----------------------------
-api_router = APIRouter(prefix="/api")
+api = APIRouter(prefix="/api")
 
-# 📌 Rotas de autenticação
-api_router.include_router(login_router)
+api.include_router(auth.router)
+api.include_router(company.router)
+api.include_router(uploads.router)
+api.include_router(dashboard.router)
+api.include_router(reports.router)
 
-# 📌 Rotas principais
-api_router.include_router(clients.router)
-api_router.include_router(uploads.router)
-api_router.include_router(analyses.router)
-api_router.include_router(reports.router)
-api_router.include_router(dashboard.router)
+app.include_router(api)
 
 # -----------------------------
-# 5. Health check (para monitoramento)
+# 5. Health check
 # -----------------------------
-@api_router.get("/health")
+@app.get("/health")
 def health():
-    return {"ok": True, "env": settings.ENV}
-
-# -----------------------------
-# 6. Registro do roteador principal
-# -----------------------------
-app.include_router(api_router)
+    return {"status": "ok", "env": settings.ENV}
