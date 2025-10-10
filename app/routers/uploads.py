@@ -33,7 +33,7 @@ async def upload_file(
         upload_record = Upload(
             client_id=client_id,
             filename=file.filename,
-            path=file_location
+            filepath=file_location
         )
         db.add(upload_record)
         db.commit()
