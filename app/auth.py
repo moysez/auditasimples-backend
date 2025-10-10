@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel
 from .config import settings
 
-login_router = APIRouter()
+login_router = APIRouter(prefix="/login", tags=["Auth"])
 security = HTTPBearer()
 
 class LoginPayload(BaseModel):
