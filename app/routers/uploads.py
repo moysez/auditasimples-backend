@@ -75,7 +75,7 @@ def list_uploads(
             {
                 "id": u.id,
                 "filename": u.filename,
-                "created_at": u.created_at.isoformat() if u.created_at else None
+                "created_at": u.uploaded_at.isoformat() if u.uploaded_at else None
             }
             for u in uploads
         ]
