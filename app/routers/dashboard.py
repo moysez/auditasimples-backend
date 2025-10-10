@@ -1,37 +1,39 @@
-from __future__ import annotations
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
-from ..db import get_session
-from ..auth import get_current_user
-from ..models import Upload
 from ..services.analysis import run_analysis_for_upload
 
-router = APIRouter(prefix='/dashboard', tags=['dashboard'])
+router = APIRouter(
+    prefix="/dashboard",
+    tags=["Dashboard"]
+)
 
-@router.get('')
-def get_dashboard(client_id: int, upload_id: Optional[int] = None,
-                  db: Session = Depends(get_session), user=Depends(get_current_user)):
-    qry = db.query(Upload).filter(Upload.client_id == client_id).order_by(Upload.id.desc())
-    up = db.query(Upload).get(upload_id) if upload_id else qry.first()
-    if not up:
-        raise HTTPException(404, detail='Nenhum upload encontrado para o cliente.')
-    summary = run_analysis_for_upload(up.storage_key)
-    return {
-        'client_id': client_id,
-        'upload_id': up.id,
-        'summary': summary,
-        'cards': {
-            'documentos': summary['documents'],
-            'itens': summary['items'],
-            'valor_total': summary['total_value_sum'],
-            'periodo': f"{summary.get('period_start','?')} a {summary.get('period_end','?')}",
-            'economia_simulada': summary['savings_simulated'],
+@router.get("/")
+def get_dashboard(
+    client_id: int = Query(..., description="ID do cliente"),
+    upload_id: Optional[str] = Query(None, description="ID do upload (storage_key)")
+):
+    """
+    Retorna os dados analíticos fiscais para exibição no dashboard.
+    """
+    try:
+        if not upload_id:
+            raise HTTPException(status_code=400, detail="upload_id obrigatório")
+
+        # Chama a mesma função de análise que já está pronta
+        result = run_analysis_for_upload(upload_id)
+        return {"cards": {
+            "documentos": result["documents"],
+            "itens": result["items"],
+            "valor_total": result["total_value_sum"],
+            "economia_simulada": result["savings_simulated"],
+            "periodo": f"{result['period_start']} - {result['period_end']}"
         },
-        'erros_fiscais': {
-            'monofasico_sem_ncm': summary['monofasico_sem_ncm'],
-            'monofasico_desc': summary['monofasico_palavra_chave'],
-            'st_corretos': summary['st_cfop_csosn_corretos'],
-            'st_incorretos': summary['st_incorreta'],
-        },
-    }
+        "erros_fiscais": {
+            "monofasico_sem_ncm": result["monofasico_sem_ncm"],
+            "monofasico_desc": result["monofasico_palavra_chave"],
+            "st_corretos": result["st_cfop_csosn_corretos"],
+            "st_incorretos": result["st_incorreta"]
+        }}
+    except Exception as e:
+        print(f"❌ Erro interno no dashboard: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao carregar dados do dashboard")
