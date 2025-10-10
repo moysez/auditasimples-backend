@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .db import Base, engine
 from .auth import login_router
-from .routers import clients, uploads, analyses, reports
+from .routers import clients, uploads, analyses, reports, dashboard  # 👈 ADICIONE dashboard aqui
 
 # -----------------------------
 # 1. Criação da aplicação
@@ -43,7 +43,11 @@ app.include_router(clients.router, prefix="/api")
 app.include_router(uploads.router, prefix="/api")
 app.include_router(analyses.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")  # 👈 ADICIONADO AQUI
 
+# -----------------------------
+# 5. Health check
+# -----------------------------
 @app.get("/health")
 def health():
     return {"ok": True, "env": settings.ENV}
