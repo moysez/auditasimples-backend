@@ -8,7 +8,7 @@ uvicorn[standard]==0.30.6
 # 🧱 Banco de dados
 # ============================
 SQLAlchemy==2.0.35
-psycopg2-binary==2.9.9
+psycopg[binary]
 
 # ============================
 # 🔐 Autenticação e segurança
