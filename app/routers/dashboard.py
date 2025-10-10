@@ -27,9 +27,11 @@ def get_dashboard(
             "erros_fiscais": {
                 "monofasico_sem_ncm": result["monofasico_sem_ncm"],
                 "monofasico_desc": result["monofasico_palavra_chave"],
+                "monofasico_ia": result["monofasico_ia_detectado"],
                 "st_corretos": result["st_cfop_csosn_corretos"],
                 "st_incorretos": result["st_incorreta"]
             }
+
         }
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
