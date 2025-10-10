@@ -18,19 +18,23 @@ app = FastAPI(
 # -----------------------------
 # 2. Configuração de CORS
 # -----------------------------
+# ❗ Inclua todos os domínios que podem chamar a API.
+# É importante que seja EXATAMENTE igual ao "Origin" do navegador.
 origins = [
-    "https://auditasimples.io",   # domínio do frontend em produção
-    "http://localhost:5500",      # opcional, útil se for testar localmente
+    "https://auditasimples.io",
+    "https://www.auditasimples.io",  # se for acessado com www
+    "http://localhost:5500",         # ambiente local opcional
 ]
 
+# ⚠️ Middleware CORS sempre ANTES das rotas
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],   # ✅ Garante aceitação de POST, OPTIONS etc
-    allow_headers=["*"],   # ✅ Garante que Authorization e Content-Type passem
-    expose_headers=["*"],  # 👈 útil se precisar ler headers na resposta
-    max_age=3600           # 👈 cacheia preflight, melhora performance
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600
 )
 
 # -----------------------------
@@ -50,9 +54,10 @@ api_router.include_router(analyses.router)
 api_router.include_router(reports.router)
 api_router.include_router(dashboard.router)
 
+# 🔹 Health check
 @api_router.get("/health")
 def health():
     return {"ok": True, "env": settings.ENV}
 
-# Registra tudo no app principal
+# 🔹 Registrar rotas no app principal
 app.include_router(api_router)
