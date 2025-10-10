@@ -4,15 +4,19 @@ from typing import List
 from ..db import get_session
 from ..models.clients import Client
 
-router = APIRouter(prefix="/clients", tags=["Clients"])
+router = APIRouter(
+    prefix="/clients",
+    tags=["Clients"]
+)
 
 # 📌 Criar cliente
 @router.post("/", response_model=dict)
 def create_client(
-    name: str = Form(...),             # 👈 agora vem do FormData
-    cnpj: str = Form(...),             # 👈 novo campo CNPJ
+    name: str = Form(...),
+    cnpj: str = Form(...),
     db: Session = Depends(get_session)
 ):
+    # Verifica se já existe cliente com esse CNPJ
     existing = db.query(Client).filter(Client.cnpj == cnpj).first()
     if existing:
         raise HTTPException(status_code=400, detail="Empresa já cadastrada")
@@ -21,9 +25,10 @@ def create_client(
     db.add(client)
     db.commit()
     db.refresh(client)
+
     return {"id": client.id, "name": client.name, "cnpj": client.cnpj}
 
-# 📌 Listar todos os clientes
+# 📌 Listar clientes
 @router.get("/", response_model=List[dict])
 def list_clients(db: Session = Depends(get_session)):
     clients = db.query(Client).all()
