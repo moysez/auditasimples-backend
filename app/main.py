@@ -4,17 +4,18 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .db import Base, engine, get_session
 from .auth import login_router
-from .routers import clients, company  # 👈 importamos aqui
+from .routers import clients, company
 
 app = FastAPI(
     title="AuditaSimples API",
     version="1.0.0"
 )
 
-# 🌐 CORS
+# ✅ Lista de origens permitidas
 origins = [
-    settings.FRONTEND_ORIGIN,
-    "http://localhost:5500"
+    "https://auditasimples.io",
+    "https://www.auditasimples.io",
+    "http://localhost:5500"  # para desenvolvimento local
 ]
 
 app.add_middleware(
@@ -25,28 +26,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 🧱 Banco
+# 🧱 Cria tabelas
 Base.metadata.create_all(bind=engine)
 
-# 📌 Rotas da API
+# 📌 Rotas
 api = APIRouter(prefix="/api")
 api.include_router(login_router)
-api.include_router(clients.router)   # 👈 agora registradas
+api.include_router(clients.router)
 api.include_router(company.router)
 
-# 🩺 Health checks
 @app.get("/health")
 def health():
     return {"status": "ok", "env": settings.ENV}
 
 @app.get("/db-check")
 def check_db(session: Session = Depends(get_session)):
-    try:
-        with engine.connect() as conn:
-            result = conn.execute("SELECT 1")
-            return {"status": "ok", "result": [row for row in result]}
-    except Exception as e:
-        return {"status": "error", "detail": str(e)}
+    with engine.connect() as conn:
+        result = conn.execute("SELECT 1")
+        return {"status": "ok", "result": [row for row in result]}
 
-# 🔗 Inclui o roteador principal
 app.include_router(api)
