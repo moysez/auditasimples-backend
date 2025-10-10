@@ -2,7 +2,6 @@ from fastapi import FastAPI, APIRouter, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-# 📦 Imports internos
 from .config import settings
 from .db import Base, engine, get_session
 
@@ -10,23 +9,17 @@ from .db import Base, engine, get_session
 from .auth import router as auth_router
 
 # 📊 Rotas principais
-from .routers import clients, company, uploads  # 👈 adiciona uploads
+from .routers import clients, company, uploads  # 👈 login removido aqui se não existir
 
-# ---------------------------------
-# 1. Criação da aplicação
-# ---------------------------------
 app = FastAPI(
     title="AuditaSimples API",
     version="1.0.0"
 )
 
-# ---------------------------------
-# 2. CORS (origens autorizadas)
-# ---------------------------------
 origins = [
     "https://auditasimples.io",
     "https://www.auditasimples.io",
-    "http://localhost:5500"  # para desenvolvimento local
+    "http://localhost:5500"
 ]
 
 app.add_middleware(
@@ -37,30 +30,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------------------
-# 3. Banco de dados
-# ---------------------------------
 Base.metadata.create_all(bind=engine)
 
-# ---------------------------------
-# 4. Rotas da API
-# ---------------------------------
 api = APIRouter(prefix="/api")
-api.include_router(login_router)
+
+# 🔸 Se ainda não criou login, REMOVA esta linha
+# api.include_router(login_router)
+
 api.include_router(clients.router)
 api.include_router(company.router)
-api.include_router(uploads.router)  # 👈 adiciona uploads aqui
-
-# 🔑 Autenticação
+api.include_router(uploads.router)
 api.include_router(auth_router)
 
-# 📌 Módulos principais
-api.include_router(clients.router)
-api.include_router(company.router)
-
-# ---------------------------------
-# 5. Health Checks
-# ---------------------------------
 @app.get("/health")
 def health():
     return {"status": "ok", "env": settings.ENV}
@@ -74,7 +55,4 @@ def check_db(session: Session = Depends(get_session)):
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
-# ---------------------------------
-# 6. Registro final
-# ---------------------------------
 app.include_router(api)
