@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Form
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from typing import List
 from ..db import get_session
 from ..models.clients import Client
@@ -9,38 +10,47 @@ router = APIRouter(
     tags=["Clients"]
 )
 
+# 🧾 Schemas de entrada e saída
+class ClientCreate(BaseModel):
+    name: str
+    cnpj: str
+
+class ClientOut(BaseModel):
+    id: int
+    name: str
+    cnpj: str
+
+    class Config:
+        orm_mode = True
+
 # 📌 Criar cliente
-@router.post("/", response_model=dict)
-def create_client(
-    name: str = Form(...),
-    cnpj: str = Form(...),
-    db: Session = Depends(get_session)
-):
+@router.post("/", response_model=ClientOut)
+def create_client(payload: ClientCreate, db: Session = Depends(get_session)):
     # Verifica se já existe cliente com esse CNPJ
-    existing = db.query(Client).filter(Client.cnpj == cnpj).first()
+    existing = db.query(Client).filter(Client.cnpj == payload.cnpj).first()
     if existing:
         raise HTTPException(status_code=400, detail="Empresa já cadastrada")
 
-    client = Client(name=name, cnpj=cnpj)
+    client = Client(name=payload.name, cnpj=payload.cnpj)
     db.add(client)
     db.commit()
     db.refresh(client)
 
-    return {"id": client.id, "name": client.name, "cnpj": client.cnpj}
+    return client
 
 # 📌 Listar clientes
-@router.get("/", response_model=List[dict])
+@router.get("/", response_model=List[ClientOut])
 def list_clients(db: Session = Depends(get_session)):
     clients = db.query(Client).all()
-    return [{"id": c.id, "name": c.name, "cnpj": c.cnpj} for c in clients]
+    return clients
 
 # 📌 Buscar cliente por ID
-@router.get("/{client_id}", response_model=dict)
+@router.get("/{client_id}", response_model=ClientOut)
 def get_client(client_id: int, db: Session = Depends(get_session)):
     client = db.query(Client).get(client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
-    return {"id": client.id, "name": client.name, "cnpj": client.cnpj}
+    return client
 
 # 📌 Deletar cliente
 @router.delete("/{client_id}")
