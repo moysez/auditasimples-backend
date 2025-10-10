@@ -16,13 +16,20 @@ async def create_upload(
     db: Session = Depends(get_session),
     user=Depends(get_current_user)
 ):
+    # Verifica se o cliente existe
     client = db.query(Client).get(client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
 
-    file_data = await save_zip_and_return_key(file)
+    # Salva o arquivo ZIP localmente e retorna uma storage_key
+    storage_key = await save_zip_and_return_key(file)
 
-    up = Upload(client_id=client_id, filename=file.filename, storage_key=file_data)
+    # Cria o registro de upload no banco
+    up = Upload(
+        client_id=client_id,
+        filename=file.filename,
+        storage_key=storage_key
+    )
     db.add(up)
     db.commit()
     db.refresh(up)
