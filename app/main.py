@@ -10,7 +10,7 @@ from .db import Base, engine, get_session
 from .auth import router as auth_router
 
 # 📊 Rotas principais
-from .routers import clients, company
+from .routers import clients, company, uploads  # 👈 adiciona uploads
 
 # ---------------------------------
 # 1. Criação da aplicação
@@ -46,6 +46,10 @@ Base.metadata.create_all(bind=engine)
 # 4. Rotas da API
 # ---------------------------------
 api = APIRouter(prefix="/api")
+api.include_router(login_router)
+api.include_router(clients.router)
+api.include_router(company.router)
+api.include_router(uploads.router)  # 👈 adiciona uploads aqui
 
 # 🔑 Autenticação
 api.include_router(auth_router)
