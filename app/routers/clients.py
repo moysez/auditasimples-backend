@@ -31,7 +31,7 @@ def list_clients(db: Session = Depends(get_session)):
 # 📌 Buscar cliente por ID
 @router.get("/{client_id}", response_model=dict)
 def get_client(client_id: int, db: Session = Depends(get_session)):
-    client = db.query(Client).get(client_id)
+    client = db.get(Client, client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     return {"id": client.id, "name": client.name, "email": client.email}
@@ -39,7 +39,7 @@ def get_client(client_id: int, db: Session = Depends(get_session)):
 # 📌 Deletar cliente
 @router.delete("/{client_id}")
 def delete_client(client_id: int, db: Session = Depends(get_session)):
-    client = db.query(Client).get(client_id)
+    client = db.get(Client, client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     db.delete(client)
