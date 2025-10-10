@@ -1,21 +1,44 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from ..db import get_session
-from ..models import Client
-from ..schemas import ClientCreate, ClientOut
-from ..auth import get_current_user
 from typing import List
+from ..db import get_session
+from ..models.clients import Client
 
-router = APIRouter(prefix="/clients", tags=["clients"])
+router = APIRouter(prefix="/clients", tags=["Clients"])
 
-@router.post("/", response_model=ClientOut)
-def create_client(payload: ClientCreate, db: Session = Depends(get_session), user=Depends(get_current_user)):
-    c = Client(name=payload.name, cnpj=payload.cnpj)
-    db.add(c)
+# 📌 Criar cliente
+@router.post("/", response_model=dict)
+def create_client(name: str, email: str = None, db: Session = Depends(get_session)):
+    existing = db.query(Client).filter(Client.email == email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Cliente já existe")
+
+    client = Client(name=name, email=email)
+    db.add(client)
     db.commit()
-    db.refresh(c)
-    return c
+    db.refresh(client)
+    return {"id": client.id, "name": client.name, "email": client.email}
 
-@router.get("/", response_model=List[ClientOut])
-def list_clients(db: Session = Depends(get_session), user=Depends(get_current_user)):
-    return db.query(Client).order_by(Client.id.desc()).all()
+# 📌 Listar todos os clientes
+@router.get("/", response_model=List[dict])
+def list_clients(db: Session = Depends(get_session)):
+    clients = db.query(Client).all()
+    return [{"id": c.id, "name": c.name, "email": c.email} for c in clients]
+
+# 📌 Buscar cliente por ID
+@router.get("/{client_id}", response_model=dict)
+def get_client(client_id: int, db: Session = Depends(get_session)):
+    client = db.query(Client).get(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    return {"id": client.id, "name": client.name, "email": client.email}
+
+# 📌 Deletar cliente
+@router.delete("/{client_id}")
+def delete_client(client_id: int, db: Session = Depends(get_session)):
+    client = db.query(Client).get(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    db.delete(client)
+    db.commit()
+    return {"ok": True, "message": "Cliente deletado com sucesso"}
