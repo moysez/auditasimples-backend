@@ -1,15 +1,14 @@
 from fastapi import FastAPI, APIRouter, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import text  # 👈 Import necessário para SELECT no SQLAlchemy 2.x
 
 # 📦 Imports internos
 from .config import settings
 from .db import Base, engine, get_session
 from .auth import login_router
 
-# ⚠️ Removemos imports da pasta routers que você deletou
-# Se as rotas foram movidas para services ou para outros arquivos, importe de lá:
-# Exemplo:
+# ⚠️ Caso você tenha movido as rotas para services, importe-as assim:
 # from .services.clients import router as clients_router
 # from .services.uploads import router as uploads_router
 # from .services.analysis import router as analyses_router
@@ -50,7 +49,7 @@ Base.metadata.create_all(bind=engine)
 api = APIRouter(prefix="/api")
 api.include_router(login_router)
 
-# 🔸 Se você tiver routers dentro de services, registre aqui:
+# Se você tiver outras rotas:
 # api.include_router(clients_router)
 # api.include_router(uploads_router)
 # api.include_router(analyses_router)
@@ -64,14 +63,14 @@ def health():
     return {"status": "ok", "env": settings.ENV}
 
 # -----------------------------
-# 6. Health check do Banco
+# 6. Health check do Banco (corrigido)
 # -----------------------------
 @app.get("/db-check")
 def check_db(session: Session = Depends(get_session)):
     try:
         with engine.connect() as conn:
-            result = conn.execute("SELECT 1")
-            return {"status": "ok", "result": [row for row in result]}
+            result = conn.execute(text("SELECT 1"))  # 👈 Usando text() para SQLAlchemy 2.x
+            return {"status": "ok", "result": [row[0] for row in result]}
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
