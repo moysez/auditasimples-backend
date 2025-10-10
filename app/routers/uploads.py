@@ -67,7 +67,7 @@ def list_uploads(
         uploads = (
             db.query(Upload)
             .filter(Upload.client_id == client_id)
-            .order_by(Upload.created_at.desc())
+            .order_by(Upload.uploaded_at.desc())
             .all()
         )
 
