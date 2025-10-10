@@ -1,42 +1,63 @@
-import io, zipfile
-from sqlalchemy.orm import Session
-from ..models import Upload, AnalysisJob, Report
-from .storage import get_zip_bytes
-from ..utils.nfe_parser import parse_xml_for_basic_fields
+from __future__ import annotations
+from typing import Dict, Any
+import zipfile
+from .nfe import parse_nfe_xml
+from ..services.storage import get_zip_path
 
-MONOFASICOS_NCM = {"2401", "2402", "2403"}
-ST_NCM = {"2203", "3303"}
+KEYWORDS_MONO = [
+    'refrigerante','coca','coca-cola','cerveja','skol','brahma','antarctica',
+    'guaraná','guarana','pepsi','heineken','amstel'
+]
 
-def apply_rules(entries):
-    findings = []
-    totals = {"docs": 0, "suspeitas": 0}
-    for e in entries:
-        issue_list = []
-        ncm = e.get("ncm") or ""
-        if len(ncm) < 4:
-            issue_list.append({"code": "NCM_MISSING", "msg": "NCM ausente ou inválido"})
-        if ncm[:4] in MONOFASICOS_NCM and e.get("cst") not in {"04", "06"}:
-            issue_list.append({"code": "CST_MONO", "msg": "CST incompatível com monofásico (exemplo)"})
-        if ncm[:4] in ST_NCM and not str(e.get("cfop","")).startswith("5"):
-            issue_list.append({"code": "CFOP_ST", "msg": "CFOP possivelmente incorreto para ST (exemplo)"})
-        totals["docs"] += 1
-        if issue_list: totals["suspeitas"] += 1
-        findings.append({ "chave": e.get("chave"), "ncm": ncm, "cst": e.get("cst"), "cfop": e.get("cfop"), "issues": issue_list })
-    return findings, totals
+def _is_monofasico_by_desc(desc: str) -> bool:
+    d = (desc or '').lower()
+    return any(k in d for k in KEYWORDS_MONO)
 
-def run_analysis_for_upload(db: Session, upload: Upload, job: AnalysisJob) -> Report:
-    raw = get_zip_bytes(upload.storage_key)
-    zf = zipfile.ZipFile(io.BytesIO(raw))
-    entries = []
-    for name in zf.namelist():
-        if name.lower().endswith(".xml"):
-            xml_bytes = zf.read(name)
+def _has_valid_ncm(ncm: str) -> bool:
+    n = (ncm or '').strip()
+    return len(n) == 8 and n.isdigit()
+
+def run_analysis_for_upload(storage_key: str) -> Dict[str, Any]:
+    path = get_zip_path(storage_key)
+    totals = {
+        'documents': 0, 'total_value_sum': 0.0,
+        'period_start': None, 'period_end': None,
+        'items': 0,
+        'monofasico_sem_ncm': 0, 'monofasico_palavra_chave': 0,
+        'st_cfop_csosn_corretos': 0, 'st_incorreta': 0,
+    }
+    with zipfile.ZipFile(path, 'r') as zf:
+        for name in zf.namelist():
+            if not name.lower().endswith('.xml'):
+                continue
             try:
-                entries.append(parse_xml_for_basic_fields(xml_bytes))
+                xml_bytes = zf.read(name)
             except Exception:
-                entries.append({"chave": name, "ncm": "", "cst": "", "cfop": "", "parse_error": True})
-    findings, totals = apply_rules(entries)
-    title = f"Análise Upload {upload.id} — {totals['docs']} docs, {totals['suspeitas']} com suspeita"
-    rep = Report(client_id=upload.client_id, analysis_id=job.id, title=title, findings=findings, totals=totals)
-    db.add(rep); db.commit(); db.refresh(rep)
-    return rep
+                continue
+            doc = parse_nfe_xml(xml_bytes)
+            totals['documents'] += 1
+            totals['total_value_sum'] += doc.get('total_value', 0.0)
+            dt = doc.get('issue_date')
+            if dt:
+                if totals['period_start'] is None or dt < totals['period_start']:
+                    totals['period_start'] = dt
+                if totals['period_end'] is None or dt > totals['period_end']:
+                    totals['period_end'] = dt
+            for item in doc.get('items', []):
+                totals['items'] += 1
+                desc = item.get('xProd',''); ncm = item.get('ncm','')
+                cfop = item.get('cfop',''); csosn = item.get('csosn','')
+                if _is_monofasico_by_desc(desc):
+                    totals['monofasico_palavra_chave'] += 1
+                    if not _has_valid_ncm(ncm):
+                        totals['monofasico_sem_ncm'] += 1
+                if cfop == '5405' and csosn == '500':
+                    totals['st_cfop_csosn_corretos'] += 1
+                else:
+                    totals['st_incorreta'] += 1
+    if totals['period_start']:
+        totals['period_start'] = totals['period_start'].isoformat()
+    if totals['period_end']:
+        totals['period_end'] = totals['period_end'].isoformat()
+    totals['savings_simulated'] = round(0.005 * totals['total_value_sum'], 2)
+    return totals
