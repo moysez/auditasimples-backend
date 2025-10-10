@@ -6,6 +6,7 @@ from ..services.analysis import run_analysis_from_bytes
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
+@router.get("")
 @router.get("/")
 def get_dashboard(
     client_id: int = Query(...),
