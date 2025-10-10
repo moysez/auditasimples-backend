@@ -1,7 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 
-# Importações dos módulos internos
+# Importações internas
 from .config import settings
 from .db import Base, engine
 from .auth import login_router
@@ -19,16 +19,15 @@ app = FastAPI(
 # 2. Configuração de CORS
 # -----------------------------
 origins = [
-    "https://auditasimples.io",
-    "https://www.auditasimples.io",  # 👈 Adicione o www se o front usar
+    "https://auditasimples.io",  # domínio do frontend
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],   # 👈 importante para OPTIONS
-    allow_headers=["*"],   # 👈 libera Content-Type, Authorization etc.
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # -----------------------------
@@ -37,18 +36,22 @@ app.add_middleware(
 Base.metadata.create_all(bind=engine)
 
 # -----------------------------
-# 4. Rotas
+# 4. Rotas com prefixo /api
 # -----------------------------
-app.include_router(login_router, prefix="/api")
-app.include_router(clients.router, prefix="/api")
-app.include_router(uploads.router, prefix="/api")
-app.include_router(analyses.router, prefix="/api")
-app.include_router(reports.router, prefix="/api")
-app.include_router(dashboard.router, prefix="/api")
+api_router = APIRouter(prefix="/api")
 
-# -----------------------------
-# 5. Health check
-# -----------------------------
-@app.get("/health")
+# Inclui todas as rotas dentro do /api
+api_router.include_router(login_router)
+api_router.include_router(clients.router)
+api_router.include_router(uploads.router)
+api_router.include_router(analyses.router)
+api_router.include_router(reports.router)
+api_router.include_router(dashboard.router)
+
+# Health check padronizado
+@api_router.get("/health")
 def health():
     return {"ok": True, "env": settings.ENV}
+
+# Registra tudo no app principal
+app.include_router(api_router)
