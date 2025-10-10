@@ -4,7 +4,10 @@ from typing import List
 from ..db import get_session
 from ..models.clients import Client
 
-router = APIRouter(prefix="/clients", tags=["Clients"])
+router = APIRouter(
+    prefix="/clients",
+    tags=["Clients"]
+)
 
 # 📌 Criar cliente
 @router.post("/", response_model=dict)
