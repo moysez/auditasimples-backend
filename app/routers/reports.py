@@ -1,20 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from ..db import get_session
-from ..models import Report
-from ..schemas import ReportOut
-from ..auth import get_current_user
-from typing import List
+from ..db import get_db
+from ..models.report import Report
 
-router = APIRouter(prefix="/reports", tags=["reports"])
+router = APIRouter(prefix="/reports", tags=["Reports"])
 
-@router.get("/", response_model=List[ReportOut])
-def list_reports(db: Session = Depends(get_session), user=Depends(get_current_user)):
-    return db.query(Report).order_by(Report.id.desc()).all()
-
-@router.get("/{report_id}", response_model=ReportOut)
-def get_report(report_id: int, db: Session = Depends(get_session), user=Depends(get_current_user)):
-    r = db.query(Report).get(report_id)
-    if not r:
-        raise HTTPException(status_code=404, detail="Relatório não encontrado")
-    return r
+@router.get("/{company_id}")
+def list_reports(company_id: int, db: Session = Depends(get_db)):
+    return db.query(Report).filter_by(company_id=company_id).order_by(Report.created_at.desc()).all()
