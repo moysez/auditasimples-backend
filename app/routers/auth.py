@@ -1,13 +1,19 @@
 from fastapi import APIRouter, HTTPException, Depends, Form
 from sqlalchemy.orm import Session
-from ..db import get_session  # 👈 use get_session, não get_db (se no seu projeto o nome for assim)
+from jose import jwt
+from datetime import datetime, timedelta
+from pydantic import BaseModel
+from ..db import get_session
 from ..models.user import User
 from ..services.auth import get_password_hash, verify_password, create_access_token
+from .config import settings
 
-# ✅ prefixo único e claro
-router = APIRouter(prefix="/auth", tags=["Auth"])
+router = APIRouter(
+    prefix="/auth",   # 👈 prefixo padronizado
+    tags=["Auth"]
+)
 
-# 📌 Registrar novo usuário (admin no seu caso)
+# 📌 Registro de novo usuário (admin ou outros)
 @router.post("/register")
 def register(
     email: str = Form(...),
@@ -21,7 +27,7 @@ def register(
     db.commit()
     return {"message": "Usuário criado com sucesso"}
 
-# 📌 Login
+# 📌 Login com verificação no banco
 @router.post("/login")
 def login(
     email: str = Form(...),
