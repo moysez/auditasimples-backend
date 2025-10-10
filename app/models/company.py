@@ -1,12 +1,15 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
-from sqlalchemy.sql import func
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
+from datetime import datetime
 from ..db import Base
 
 class Company(Base):
     __tablename__ = "companies"
+
     id = Column(Integer, primary_key=True, index=True)
-    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    name = Column(String(200), nullable=False)
     cnpj = Column(String(20), unique=True, nullable=False)
-    nome_fantasia = Column(String(255), nullable=False)
-    razao_social = Column(String(255))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    client = relationship("Client", backref="companies")
