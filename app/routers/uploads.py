@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 import os, traceback
 
 from ..db import get_session
-from ..models.upload import Uploads
+from ..models.upload import Upload
 
 router = APIRouter(
     prefix="/uploads",
