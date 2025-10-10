@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends
+from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import os, traceback
@@ -11,9 +11,13 @@ router = APIRouter(
     tags=["Uploads"]
 )
 
+# 📁 Diretório de armazenamento
 UPLOAD_DIR = "/tmp/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# ===============================
+# 📤 UPLOAD DE ARQUIVO ZIP
+# ===============================
 @router.post("/")
 async def upload_file(
     file: UploadFile = File(...),
@@ -21,7 +25,7 @@ async def upload_file(
     db: Session = Depends(get_session)
 ):
     try:
-        # 🗂️ Salvar arquivo físico
+        # 🗂️ Salvar arquivo físico no diretório
         file_location = os.path.join(UPLOAD_DIR, file.filename)
         with open(file_location, "wb") as f:
             f.write(await file.read())
@@ -49,4 +53,33 @@ async def upload_file(
 
     except Exception as e:
         print("❌ Erro ao salvar no banco:", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ===============================
+# 📋 LISTAR UPLOADS POR EMPRESA
+# ===============================
+@router.get("/list")
+def list_uploads(
+    client_id: int = Query(...),
+    db: Session = Depends(get_session)
+):
+    try:
+        uploads = (
+            db.query(Upload)
+            .filter(Upload.client_id == client_id)
+            .order_by(Upload.created_at.desc())
+            .all()
+        )
+
+        return [
+            {
+                "id": u.id,
+                "filename": u.filename,
+                "created_at": u.created_at.isoformat() if u.created_at else None
+            }
+            for u in uploads
+        ]
+
+    except Exception as e:
+        print("❌ Erro ao listar uploads:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
