@@ -1,15 +1,30 @@
-from fastapi import APIRouter, UploadFile, Form, Depends
-from sqlalchemy.orm import Session
-from ..db import get_session
-from ..services.storage import save_zip_and_return_id
+from fastapi import APIRouter, File, UploadFile, Form, HTTPException
+from fastapi.responses import JSONResponse
+import os
 
-router = APIRouter(prefix="/uploads", tags=["Uploads"])
+router = APIRouter(
+    prefix="/uploads",
+    tags=["Uploads"]
+)
+
+# 📁 Diretório onde os arquivos serão salvos
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/")
 async def upload_file(
-    client_id: int = Form(...),
-    file: UploadFile = None,
-    db: Session = Depends(get_session)
+    file: UploadFile = File(...),
+    client_id: str = Form(None)
 ):
-    upload_id = await save_zip_and_return_id(file, client_id, db)
-    return {"message": "Upload salvo com sucesso", "upload_id": upload_id}
+    try:
+        file_location = os.path.join(UPLOAD_DIR, file.filename)
+        with open(file_location, "wb") as f:
+            f.write(await file.read())
+
+        return JSONResponse({
+            "filename": file.filename,
+            "message": "Upload realizado com sucesso",
+            "client_id": client_id
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
