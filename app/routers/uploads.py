@@ -25,25 +25,18 @@ async def upload_file(
     db: Session = Depends(get_session)
 ):
     try:
-        # 🗂️ Salvar arquivo físico no diretório
-        file_location = os.path.join(UPLOAD_DIR, file.filename)
-        with open(file_location, "wb") as f:
-            f.write(await file.read())
+        # 📥 Lê o conteúdo do arquivo ZIP
+        file_bytes = await file.read()
 
-        print(f"✅ Arquivo salvo em: {file_location}")
-        print(f"📎 client_id recebido: {client_id}")
-
-        # 📝 Salvar metadados no banco
+        # 📝 Salva direto no banco no campo BYTEA
         upload_record = Upload(
             client_id=client_id,
             filename=file.filename,
-            filepath=file_location
+            filepath=file_bytes  # 👈 agora armazena os bytes
         )
         db.add(upload_record)
         db.commit()
         db.refresh(upload_record)
-
-        print(f"📦 Upload salvo no banco com ID: {upload_record.id}")
 
         return JSONResponse({
             "id": upload_record.id,
