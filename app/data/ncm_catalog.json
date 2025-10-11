@@ -1,0 +1,17 @@
+{
+  "cerveja": {
+    "monofasico": true,
+    "palavras": ["cerveja", "skol", "brahma", "antarctica", "heineken", "amstel", "bohemia", "budweiser"],
+    "ncm_prefixos_validos": ["2203"]
+  },
+  "refrigerante": {
+    "monofasico": true,
+    "palavras": ["refrigerante", "coca", "coca-cola", "guarana", "guaraná", "pepsi", "fanta", "sprite"],
+    "ncm_prefixos_validos": ["2202"]
+  },
+  "agua": {
+    "monofasico": false,
+    "palavras": ["água", "agua", "agua mineral", "água mineral", "schin", "minalba", "crystal"],
+    "ncm_prefixos_validos": ["2201"]
+  }
+}
