@@ -3,6 +3,11 @@ from sqlalchemy.orm import Session
 from ..db import get_session
 from ..services.analysis import run_analysis_from_bytes
 from ..routers.uploads import get_zip_bytes_from_db
+from fastapi import APIRouter, HTTPException, Query, Depends
+from sqlalchemy.orm import Session
+from ..db import get_session
+from ..services.analysis import run_analysis_from_bytes
+from ..routers.uploads import get_zip_bytes_from_db
 
 router = APIRouter(
     prefix="/dashboard",
@@ -11,14 +16,7 @@ router = APIRouter(
 
 @router.get("/")
 def get_dashboard(
-from fastapi import APIRouter, HTTPException, Query, Depends
-from sqlalchemy.orm import Session
-from ..db import get_session
-from ..services.analysis import run_analysis_from_bytes
-from ..routers.uploads import get_zip_bytes_from_db
-
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
-
 @router.get("/")
 def get_dashboard(
     client_id: int = Query(...),
