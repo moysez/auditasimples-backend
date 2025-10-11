@@ -50,13 +50,6 @@ async def upload_file(
             "filename": upload_record.filename,
             "client_id": upload_record.client_id
         })
-
-    except Exception as e:
-        print("❌ Erro ao salvar no banco:", traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ===============================
-# 📋 LISTAR UPLOADS POR EMPRESA
     # 👇 Função que substitui o storage.py
     def get_zip_bytes_from_db(upload_id: int, db: Session) -> bytes:
         upload = db.query(Upload).filter(Upload.id == upload_id).first()
@@ -64,6 +57,12 @@ async def upload_file(
             raise FileNotFoundError("Arquivo não encontrado")
         with open(upload.filepath, "rb") as f:
             return f.read()
+    except Exception as e:
+        print("❌ Erro ao salvar no banco:", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ===============================
+# 📋 LISTAR UPLOADS POR EMPRESA
 # ===============================
 
 @router.get("/list")
