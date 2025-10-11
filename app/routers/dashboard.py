@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy.orm import Session
 from ..db import get_session
-from ..services.uploads import get_zip_bytes_from_db
+from .uploads import get_zip_bytes_from_db
 from ..services.analysis import run_analysis_from_bytes
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
