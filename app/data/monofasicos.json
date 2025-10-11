@@ -1,0 +1,6 @@
+{
+  "cerveja": ["cerveja", "heineken", "skol", "brahma", "amstel"],
+  "refrigerante": ["coca", "coca-cola", "pepsi", "guaraná", "guarana", "refrigerante"],
+  "agua": ["água", "agua mineral", "crystal", "minalba"],
+  "cigarro": ["cigarro", "derivados de tabaco"]
+}
