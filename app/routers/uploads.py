@@ -50,21 +50,25 @@ async def upload_file(
             "filename": upload_record.filename,
             "client_id": upload_record.client_id
         })
-    # 👇 Função que substitui o storage.py
-    def get_zip_bytes_from_db(upload_id: int, db: Session) -> bytes:
-        upload = db.query(Upload).filter(Upload.id == upload_id).first()
-        if not upload or not os.path.exists(upload.filepath):
-            raise FileNotFoundError("Arquivo não encontrado")
-        with open(upload.filepath, "rb") as f:
-            return f.read()
     except Exception as e:
         print("❌ Erro ao salvar no banco:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ===============================
+# 📦 GET FILE BY ID (substitui storage.py)
+# ===============================
+def get_zip_bytes_from_db(upload_id: int, db: Session) -> bytes:
+    upload = db.query(Upload).filter(Upload.id == upload_id).first()
+    if not upload or not os.path.exists(upload.filepath):
+        raise FileNotFoundError("Arquivo não encontrado")
+    with open(upload.filepath, "rb") as f:
+        return f.read()
+
+
 # ===============================
 # 📋 LISTAR UPLOADS POR EMPRESA
 # ===============================
-
 @router.get("/list")
 def list_uploads(
     client_id: int = Query(...),
@@ -86,8 +90,6 @@ def list_uploads(
             }
             for u in uploads
         ]
-
     except Exception as e:
         print("❌ Erro ao listar uploads:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
-    
