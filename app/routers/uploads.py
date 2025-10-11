@@ -52,12 +52,13 @@ async def upload_file(
 # 📦 GET FILE BY ID (substitui storage.py)
 # ===============================
 def get_zip_bytes_from_db(upload_id: int, db: Session) -> bytes:
+    """
+    Busca o arquivo ZIP salvo no banco e retorna os bytes.
+    """
     upload = db.query(Upload).filter(Upload.id == upload_id).first()
-    if not upload or not os.path.exists(upload.filepath):
-        raise FileNotFoundError("Arquivo não encontrado")
-    with open(upload.filepath, "rb") as f:
-        return f.read()
-
+    if not upload or not upload.filepath:
+        raise FileNotFoundError("Arquivo não encontrado no banco")
+    return upload.filepath
 
 # ===============================
 # 📋 LISTAR UPLOADS POR EMPRESA
