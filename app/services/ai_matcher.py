@@ -1,95 +1,91 @@
-from __future__ import annotations
-from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
 import json
-import unicodedata
-from rapidfuzz import fuzz
+import os
+import difflib
 
-CATALOG_PATH = Path(__file__).resolve().parents[1] / "data" / "ncm_catalog.json"
+# Caminho do JSON com as categorias monofásicas
+DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "monofasicos.json")
 
-def _normalize(s: str) -> str:
-    if not s:
-        return ""
-    s = s.lower().strip()
-    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
-    return " ".join(s.split())
+# Tabela de NCM monofásicos por categoria (exemplo inicial)
+# Pode evoluir depois com dados oficiais (Bebidas Frias, Cigarros, Combustíveis, etc.)
+NCM_MAP = {
+    "cerveja": ["22030000", "22029100"],
+    "refrigerante": ["22021000", "22029000"],
+    "agua": ["22011000"],
+    "cigarro": ["24022000"]
+}
 
-class SemanticNCMMatcher:
+# Carregar dicionário de palavras-chave do arquivo JSON
+with open(DATA_PATH, "r", encoding="utf-8") as f:
+    KEYWORDS = json.load(f)
+
+# Transformar em lookup plano para fuzzy match
+FLAT_KEYWORDS = []
+for cat, words in KEYWORDS.items():
+    for w in words:
+        FLAT_KEYWORDS.append((w.lower(), cat))
+
+
+# -------------------------------------------
+# 🔸 Função: classificação por descrição
+# -------------------------------------------
+def classify(description: str, min_ratio: float = 0.75):
     """
-    Matching semântico leve (fuzzy) 100% local:
-      - classifica a descrição em uma categoria (cerveja, refrigerante, etc.)
-      - valida NCM por prefixo permitido por categoria (editável no JSON)
+    Faz fuzzy matching com as palavras cadastradas em monofasicos.json.
+    Retorna (categoria, score) ou None.
     """
+    desc_lower = description.lower()
+    best_match = None
+    best_ratio = 0
 
-    def __init__(self, threshold: int = 85):
-        self.threshold = threshold
-        self.catalog: Dict[str, Dict[str, Any]] = {}
+    for kw, cat in FLAT_KEYWORDS:
+        ratio = difflib.SequenceMatcher(None, kw, desc_lower).ratio()
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_match = cat
 
-    def load(self, path: Path = CATALOG_PATH) -> None:
-        with open(path, "r", encoding="utf-8") as f:
-            self.catalog = json.load(f)
-
-        # pré-normaliza palavras
-        for cat, cfg in self.catalog.items():
-            cfg["__palavras_norm__"] = [_normalize(w) for w in cfg.get("palavras", [])]
-
-    def classify(self, descricao: str) -> Optional[Tuple[str, int]]:
-        """
-        Retorna (categoria, score) se atingir o threshold, senão None.
-        """
-        d = _normalize(descricao)
-        if not d or not self.catalog:
-            return None
-
-        best_cat, best_score = None, -1
-        for cat, cfg in self.catalog.items():
-            for kw in cfg.get("__palavras_norm__", []):
-                score = fuzz.partial_ratio(d, kw)
-                if score > best_score:
-                    best_cat, best_score = cat, score
-
-        if best_cat and best_score >= self.threshold:
-            return best_cat, best_score
-        return None
-
-    def validate_ncm_for_category(self, ncm: str, categoria: str) -> Dict[str, Any]:
-        """
-        Verifica se NCM (8 dígitos) bate com os prefixos válidos da categoria.
-        """
-        n = (ncm or "").strip()
-        result = {
-            "ncm_valido": False,
-            "motivo": None
-        }
-        if len(n) != 8 or not n.isdigit():
-            result["motivo"] = "NCM ausente ou inválido"
-            return result
-
-        cfg = self.catalog.get(categoria) or {}
-        prefixes = cfg.get("ncm_prefixos_validos", [])
-        if not prefixes:
-            # Se não tiver regra no catálogo, não acusa erro
-            result["ncm_valido"] = True
-            return result
-
-        if any(n.startswith(p) for p in prefixes):
-            result["ncm_valido"] = True
-            return result
-
-        result["motivo"] = f"NCM {n} não pertence à categoria '{categoria}'"
-        return result
-
-    def is_monofasico(self, categoria: Optional[str]) -> bool:
-        if not categoria:
-            return False
-        cfg = self.catalog.get(categoria) or {}
-        return bool(cfg.get("monofasico", False))
+    if best_ratio >= min_ratio:
+        return best_match, best_ratio
+    return None
 
 
-# Singleton simples para reuso
-matcher = SemanticNCMMatcher()
-try:
-    matcher.load()
-except Exception as e:
-    # Em produção, logue isso com loguru caso queira
-    print(f"[ai_matcher] Falha ao carregar catálogo: {e}")
+# -------------------------------------------
+# 🔸 Função: validação se categoria é monofásica
+# -------------------------------------------
+def is_monofasico(category: str) -> bool:
+    """
+    Checa se a categoria identificada é monofásica
+    """
+    return category in KEYWORDS
+
+
+# -------------------------------------------
+# 🔸 Função: validação de NCM vs categoria
+# -------------------------------------------
+def validate_ncm_for_category(ncm: str, category: str):
+    """
+    Valida se o NCM informado pertence ao conjunto esperado da categoria.
+    """
+    ncm = (ncm or "").replace(".", "").strip()
+    expected = NCM_MAP.get(category, [])
+
+    return {
+        "ncm_valido": ncm in expected,
+        "ncm_informado": ncm,
+        "ncm_esperado": expected
+    }
+
+
+# -------------------------------------------
+# 📌 Debug / teste manual
+# -------------------------------------------
+if __name__ == "__main__":
+    tests = [
+        "Cerveja Heineken 600ml",
+        "Refri Coca Cola 2L",
+        "Agua Mineral Crystal",
+        "Cigarro Derby"
+    ]
+
+    for t in tests:
+        result = classify(t)
+        print(f"{t} => {result}")
