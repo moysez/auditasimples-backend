@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 from sqlalchemy import LargeBinary
 from ..db import Base
+from sqlalchemy.sql import func
 
 class Upload(Base):
     __tablename__ = "uploads"
