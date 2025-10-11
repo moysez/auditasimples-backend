@@ -1,67 +1,77 @@
 from __future__ import annotations
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from datetime import datetime
-from lxml import etree
-
-NS = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
+import xml.etree.ElementTree as ET
 
 def _text(node):
     return node.text.strip() if node is not None and node.text else ''
 
-def parse_nfe_xml(xml_bytes: bytes) -> Dict[str, Any]:
-    try:
-        root = etree.fromstring(xml_bytes)
-    except Exception:
-        xml_bytes = xml_bytes.strip()
-        root = etree.fromstring(xml_bytes)
+def parse_nfe_xml(xml_bytes):
+    root = ET.fromstring(xml_bytes)
 
-    nfe = root.find('.//nfe:NFe', namespaces=NS)
-    if nfe is None:
-        nfe = root
+    # 📌 Detecta automaticamente o namespace (prefixo dinâmico)
+    if "}" in root.tag:
+        ns_uri = root.tag.split("}")[0].strip("{")
+        ns = {"ns": ns_uri}
+    else:
+        ns = {}
 
-    dt = nfe.find('.//nfe:ide/nfe:dhEmi', namespaces=NS)
-    if dt is None:
-        dt = nfe.find('.//nfe:ide/nfe:dEmi', namespaces=NS)
-
+    # 🧾 Data de emissão
     issue_date = None
-    if dt is not None and _text(dt):
-        raw = _text(dt)
-        for fmt in ('%Y-%m-%dT%H:%M:%S%z', '%Y-%m-%d', '%Y-%m-%dT%H:%M:%S'):
+    dt_node = root.find(".//ns:ide/ns:dhEmi", ns)
+    if dt_node is None:
+        dt_node = root.find(".//ns:ide/ns:dEmi", ns)
+    if dt_node is not None and _text(dt_node):
+        raw = _text(dt_node)
+        for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"):
             try:
                 issue_date = datetime.strptime(raw, fmt)
                 break
             except Exception:
                 pass
 
-    vnf_node = nfe.find('.\nfe:total//nfe:ICMSTot/nfe:vNF', namespaces=NS)
-    if vnf_node is None:
-        vnf_node = nfe.find('.//nfe:total//nfe:ICMSTot/nfe:vNF', namespaces=NS)
-    total_value = float(_text(vnf_node).replace(',', '.')) if vnf_node is not None and _text(vnf_node) else 0.0
-
-    items: List[Dict[str, Any]] = []
-    for det in nfe.findall('.//nfe:det', namespaces=NS):
-        prod = det.find('nfe:prod', namespaces=NS)
-        imposto = det.find('nfe:imposto', namespaces=NS)
-
-        xProd = _text(prod.find('nfe:xProd', namespaces=NS)) if prod is not None else ''
-        ncm = _text(prod.find('nfe:NCM', namespaces=NS)) if prod is not None else ''
-        cfop = _text(prod.find('nfe:CFOP', namespaces=NS)) if prod is not None else ''
-        vProd = _text(prod.find('nfe:vProd', namespaces=NS)) if prod is not None else '0'
+    # 💰 Valor total da nota
+    vnf_node = root.find(".//ns:ICMSTot/ns:vNF", ns)
+    total_value = 0.0
+    if vnf_node is not None and _text(vnf_node):
         try:
-            vProd = float(vProd.replace(',', '.'))
+            total_value = float(_text(vnf_node).replace(",", "."))
+        except ValueError:
+            total_value = 0.0
+
+    # 📦 Itens
+    items: List[Dict[str, Any]] = []
+    for det in root.findall(".//ns:det", ns):
+        prod = det.find("./ns:prod", ns)
+        imposto = det.find("./ns:imposto", ns)
+
+        xProd = _text(prod.find("ns:xProd", ns)) if prod is not None else ""
+        ncm = _text(prod.find("ns:NCM", ns)) if prod is not None else ""
+        cfop = _text(prod.find("ns:CFOP", ns)) if prod is not None else ""
+        vProd = _text(prod.find("ns:vProd", ns)) if prod is not None else "0"
+        try:
+            vProd = float(vProd.replace(",", "."))
         except Exception:
             vProd = 0.0
 
-        csosn = ''
+        csosn = ""
         if imposto is not None:
-            for icms in imposto.findall('.//nfe:ICMS*', namespaces=NS):
-                cand = icms.find('nfe:CSOSN', namespaces=NS)
+            # Tenta pegar CSOSN ou CST
+            for icms in imposto.findall(".//ns:ICMS", ns):
+                cand = icms.find("ns:CSOSN", ns)
                 if cand is None:
-                    cand = icms.find('nfe:CST', namespaces=NS)
+                    cand = icms.find("ns:CST", ns)
                 if cand is not None and _text(cand):
                     csosn = _text(cand)
                     break
 
-        items.append({'xProd': xProd, 'ncm': ncm, 'cfop': cfop, 'csosn': csosn, 'vProd': vProd})
+        items.append({
+            "xProd": xProd,
+            "ncm": ncm,
+            "cfop": cfop,
+            "csosn": csosn,
+            "vProd": vProd
+        })
 
-    return {'issue_date': issue_date, 'total_value': total_value, 'items': items}
+    print("✅ parse_nfe_xml carregado de app/services/nfe.py")
+    return {"issue_date": issue_date, "total_value": total_value, "items": items}
