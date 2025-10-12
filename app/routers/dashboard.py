@@ -81,21 +81,17 @@ def get_dashboard(
         # IA por descrição COM CATEGORIA
         # -----------------------------
         mapa = load_monofasicos_map()
-        produtos = result.get("products", [])  # esperado: lista de itens com "descricao" e "valor_total"
+        produtos = result.get("products", [])  # lista de itens com descrição e valor_total
         monofasico_desc_count = 0
 
-        # Contador por categoria + exemplos
         cat_counter = defaultdict(int)
         cat_examples = defaultdict(list)
-
-        # Deduplicação por descrição
         produtos_dedup = {}
 
         for p in produtos:
             descricao = p.get("descricao") or p.get("xProd") or ""
             valor = float(p.get("valor_total") or p.get("vProd") or 0.0)
 
-            # IA: fuzzy categoria
             hit, categoria, palavra, score = match_descricao_categoria(descricao, mapa, limiar=80)
             if hit:
                 monofasico_desc_count += 1
@@ -108,7 +104,7 @@ def get_dashboard(
                         "valor": valor,
                     })
 
-            # dedup p/ relatório
+            # dedup
             key = (descricao or "").strip().lower()
             if key not in produtos_dedup:
                 produtos_dedup[key] = {
@@ -120,32 +116,51 @@ def get_dashboard(
                 produtos_dedup[key]["ocorrencias"] += 1
                 produtos_dedup[key]["valor_total"] += valor
 
-        # Lista ordenada por valor
         produtos_dedup_list = sorted(
             produtos_dedup.values(),
             key=lambda x: x["valor_total"],
             reverse=True
         )
 
-        # Monta estrutura de categorias detectadas
         categorias_detectadas = []
         for categoria, count in sorted(cat_counter.items(), key=lambda kv: kv[1], reverse=True):
             categorias_detectadas.append({
                 "categoria": categoria,
                 "ocorrencias": count,
-                "exemplos": cat_examples[categoria]  # até 5 por categoria
+                "exemplos": cat_examples[categoria]
             })
+
+        # -----------------------------
+        # Ajuste no cálculo tributário
+        # -----------------------------
+        tax = result.get("tax_summary", {})
+        faturamento = tax.get("faturamento", result.get("total_value_sum", 0.0))
+        base_corrigida = tax.get("base_corrigida", 0.0)
+        receita_excluida = tax.get("receita_excluida", 0.0)
+        imposto_corrigido = base_corrigida * aliquota
+        imposto_pago_valor = imposto_pago or 0.0
+
+        economia_estimada = 0.0
+        valor_a_pagar = 0.0
+
+        if imposto_pago is not None:
+            diferenca = imposto_pago_valor - imposto_corrigido
+            if diferenca >= 0:
+                economia_estimada = round(diferenca, 2)
+            else:
+                valor_a_pagar = round(abs(diferenca), 2)
+        else:
+            economia_estimada = round(receita_excluida * aliquota, 2)
 
         # -----------------------------
         # Resposta
         # -----------------------------
-        tax = result.get("tax_summary", {})
         return {
             "cards": {
                 "documentos": result.get("documents", 0),
                 "itens": result.get("items", 0),
                 "valor_total": result.get("total_value_sum", 0.0),
-                "economia_simulada": tax.get("economia_estimada", 0.0),
+                "economia_simulada": economia_estimada,
                 "periodo": f"{result.get('period_start')} - {result.get('period_end')}"
             },
             "erros_fiscais": {
@@ -154,22 +169,19 @@ def get_dashboard(
                 "monofasico_sem_ncm": result.get("monofasico_sem_ncm", 0),
                 "st_corretos": result.get("st_cfop_csosn_corretos", 0),
                 "st_incorretos": result.get("st_incorreta", 0),
-
-                # NOVO: categorias encontradas pela IA
                 "categorias_detectadas": categorias_detectadas,
-
-                # Relatório de itens deduplicados
                 "produtos_duplicados": produtos_dedup_list
             },
             "tributario": {
-                "faturamento": tax.get("faturamento", result.get("total_value_sum", 0.0)),
-                "base_atual": tax.get("base_atual", result.get("total_value_sum", 0.0)),
-                "base_corrigida": tax.get("base_corrigida", 0.0),
-                "receita_excluida": tax.get("receita_excluida", 0.0),
-                "imposto_pago": imposto_pago or 0.0,
-                "imposto_corrigido": tax.get("imposto_corrigido", 0.0),
-                "economia_estimada": tax.get("economia_estimada", 0.0),
-                "aliquota_utilizada": tax.get("aliquota_utilizada", aliquota),
+                "faturamento": round(faturamento, 2),
+                "base_atual": round(faturamento, 2),
+                "base_corrigida": round(base_corrigida, 2),
+                "receita_excluida": round(receita_excluida, 2),
+                "imposto_pago": round(imposto_pago_valor, 2),
+                "imposto_corrigido": round(imposto_corrigido, 2),
+                "economia_estimada": economia_estimada,
+                "valor_a_pagar": valor_a_pagar,
+                "aliquota_utilizada": aliquota,
             }
         }
 
