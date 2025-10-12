@@ -57,3 +57,7 @@ def check_db(session: Session = Depends(get_session)):
         return {"status": "error", "detail": str(e)}
 
 app.include_router(api)
+print("\n📜 ROTAS REGISTRADAS NO FASTAPI:")
+for route in app.routes:
+    print(route.path)
+print("📜 FIM DAS ROTAS\n")
