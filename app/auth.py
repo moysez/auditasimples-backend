@@ -3,6 +3,18 @@ from jose import jwt
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 from .config import settings
+from fastapi.security import OAuth2PasswordBearer
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+
+ef get_current_user(token: str = Depends(oauth2_scheme)):
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido ou ausente"
+        )
+    # Aqui você pode validar o token JWT, se desejar
+    return {"token": token}
 
 # 📌 Cria um roteador único padronizado
 router = APIRouter(
