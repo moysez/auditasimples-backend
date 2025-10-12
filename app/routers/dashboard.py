@@ -4,7 +4,6 @@ from ..db import get_session
 from ..services.analysis import run_analysis_from_bytes
 from ..routers.uploads import get_zip_bytes_from_db
 
-# Inicializa o router
 router = APIRouter(
     prefix="/dashboard",
     tags=["Dashboard"]
@@ -23,12 +22,21 @@ def get_dashboard(
     com base no arquivo XML enviado (upload_id).
     """
     try:
+        # 🔹 Normaliza a alíquota
+        if aliquota is None:
+            aliquota = 0.08  # valor padrão
+        elif aliquota > 1:  # se veio em percentual (ex: 6)
+            aliquota = aliquota / 100
+
+        # 🔹 Busca o arquivo ZIP salvo no banco
         zip_bytes = get_zip_bytes_from_db(upload_id, db)
         if not zip_bytes:
-            raise FileNotFoundError()
+            raise FileNotFoundError("Arquivo ZIP não encontrado no banco.")
 
+        # 🔹 Executa análise
         result = run_analysis_from_bytes(zip_bytes, aliquota, imposto_pago)
 
+        # 🔹 Monta resposta para o dashboard
         return {
             "cards": {
                 "documentos": result["documents"],
