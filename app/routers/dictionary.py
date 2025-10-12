@@ -1,9 +1,12 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 import json
 from pathlib import Path
 
-# 📍 Caminho do arquivo de dicionário
+# Importa autenticação
+from ..auth import get_current_user  # ✅ importante: já existente no seu projeto
+
+# 📍 Caminho do arquivo do dicionário
 DICTIONARY_FILE = Path(__file__).resolve().parent.parent / "data" / "monofasicos.json"
 
 router = APIRouter(
@@ -11,7 +14,6 @@ router = APIRouter(
     tags=["Dictionary"]
 )
 
-# 📥 Modelo de entrada
 class DictionaryUpdate(BaseModel):
     categoria: str
     palavras: list[str]
@@ -27,9 +29,9 @@ def save_dictionary(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 @router.post("/update")
-def update_dictionary(payload: DictionaryUpdate):
+def update_dictionary(payload: DictionaryUpdate, user: dict = Depends(get_current_user)):
     """
-    Adiciona ou atualiza uma categoria no dicionário monofásico.
+    🔐 Atualiza o dicionário de monofásicos — apenas com autenticação.
     """
     try:
         data = load_dictionary()
@@ -37,7 +39,6 @@ def update_dictionary(payload: DictionaryUpdate):
         palavras = [p.lower().strip() for p in payload.palavras]
 
         if categoria in data:
-            # Evita duplicar palavras
             existentes = set(data[categoria])
             novas = existentes.union(palavras)
             data[categoria] = sorted(list(novas))
@@ -45,15 +46,19 @@ def update_dictionary(payload: DictionaryUpdate):
             data[categoria] = sorted(list(set(palavras)))
 
         save_dictionary(data)
-        return {"message": f"Categoria '{categoria}' atualizada com sucesso.", "total_palavras": len(data[categoria])}
+        return {
+            "message": f"Categoria '{categoria}' atualizada com sucesso.",
+            "total_palavras": len(data[categoria]),
+            "user": user["username"]  # opcional: logar quem atualizou
+        }
     except Exception as e:
         print(f"❌ Erro ao atualizar dicionário: {e}")
         raise HTTPException(status_code=500, detail="Erro ao atualizar dicionário")
 
 @router.get("/")
-def get_dictionary():
+def get_dictionary(user: dict = Depends(get_current_user)):
     """
-    Retorna o conteúdo atual do dicionário monofásico.
+    🔐 Retorna o dicionário (também exige autenticação).
     """
     try:
         return load_dictionary()
