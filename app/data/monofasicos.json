@@ -1,14 +1,14 @@
 {
   "cerveja": [
-    "cerveja", "heineken", "skol", "brahma", "amstel", "bohemia", "original"
+    "cerveja", "heineken", "skol", "brahma", "amstel", "bohemia", "original","antartica"
   ],
   "refrigerante": [
-    "coca", "coca-cola", "guarana", "guaraná", "pepsi", "refrigerante", "soda"
+    "coca", "coca-cola", "guarana", "guaraná", "pepsi", "refrigerante", "soda", "fanta"
   ],
   "agua": [
-    "água", "agua", "agua mineral", "água mineral", "crystal", "minalba"
+    "água", "agua", "agua mineral", "água mineral", "crystal", "minalba", "com gas", "sem gas"
   ],
   "cigarro": [
-    "cigarro", "derby", "marlboro", "palermo", "free", "eight"
+    "cigarro", "derby", "marlboro", "palermo", "free", "eight", "black", "l&a"
   ]
 }
