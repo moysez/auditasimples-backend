@@ -1,6 +1,7 @@
 from fastapi import FastAPI, APIRouter, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from .routers import clients, company, uploads, dashboard, dictionary
 
 from .config import settings
 from .db import Base, engine, get_session
@@ -42,6 +43,7 @@ api.include_router(company.router)
 api.include_router(uploads.router)
 api.include_router(auth_router)
 api.include_router(dashboard.router)
+api.include_router(dictionary.router)
 
 @app.get("/health")
 def health():
