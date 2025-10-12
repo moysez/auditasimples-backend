@@ -163,15 +163,20 @@ def get_dashboard(
                 "economia_simulada": economia_estimada,
                 "periodo": f"{result.get('period_start')} - {result.get('period_end')}"
             },
-            "erros_fiscais": {
-                "monofasico_errado": result.get("monofasico_errado", 0),
-                "monofasico_desc": monofasico_desc_count,
-                "monofasico_sem_ncm": result.get("monofasico_sem_ncm", 0),
-                "st_corretos": result.get("st_cfop_csosn_corretos", 0),
-                "st_incorretos": result.get("st_incorreta", 0),
-                "categorias_detectadas": categorias_detectadas,
-                "produtos_duplicados": produtos_dedup_list
-            },
+"erros_fiscais": {
+    # alias novo (rótulo correto) apontando para o mesmo valor
+    "monofasico_ncm_incorreto": result.get("monofasico_sem_ncm", 0),
+
+    # campo antigo mantido por compatibilidade (pode remover depois)
+    "monofasico_sem_ncm": result.get("monofasico_sem_ncm", 0),
+
+    "monofasico_desc": monofasico_desc_count,
+    "st_corretos": result.get("st_cfop_csosn_corretos", 0),
+    "st_incorretos": result.get("st_incorreta", 0),
+
+    "categorias_detectadas": categorias_detectadas,
+    "produtos_duplicados": produtos_dedup_list,
+},
             "tributario": {
                 "faturamento": round(faturamento, 2),
                 "base_atual": round(faturamento, 2),
