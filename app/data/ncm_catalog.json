@@ -11,7 +11,7 @@
   },
   "agua": {
     "monofasico": false,
-    "palavras": ["água", "agua", "agua mineral", "água mineral", "schin", "minalba", "crystal"],
+    "palavras": ["água", "agua", "agua mineral", "água mineral", "minalba", "crystal"],
     "ncm_prefixos_validos": ["2201"]
   }
   "cigarro": {
