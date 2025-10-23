@@ -14,4 +14,9 @@
     "palavras": ["água", "agua", "agua mineral", "água mineral", "schin", "minalba", "crystal"],
     "ncm_prefixos_validos": ["2201"]
   }
+  "cigarro": {
+  "monofasico": true,
+  "palavras": ["cigarro", "derby", "marlboro", "palermo", "free", "eight", "black", "l&a"],
+  "ncm_prefixos_validos": ["2402"]
+}
 }
