@@ -114,7 +114,7 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
         imposto_base_atual = faturamento * aliquota
         imposto_corrigido = base_corrigida * aliquota
         economia_estimada = max(0, imposto_base_atual - imposto_corrigido)
-        imposto_pago = imposto_base_atual
+        imposto_pago = float(imposto_base_atual)
     elif imposto_pago is not None:
         try:
             aliquota_media = imposto_pago / faturamento if faturamento > 0 else 0
@@ -129,9 +129,11 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
         'receita_excluida': receita_excluida,
         'imposto_corrigido': imposto_corrigido,
         'economia_estimada': economia_estimada,
-        'aliquota_utilizada': aliquota if aliquota is not None else (imposto_pago / faturamento if faturamento else 0),
-        'imposto_pago': imposto_pago or 0.0,
-        'imposto_pago_informado': imposto_pago,
+        'aliquota_utilizada': aliquota if aliquota is not None else (
+            imposto_pago / faturamento if faturamento else 0
+        ),
+        'imposto_pago': imposto_pago if imposto_pago is not None else 0.0,
+        'imposto_pago_informado': imposto_pago if imposto_pago is not None else None
     }
 
     return totals
