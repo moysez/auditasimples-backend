@@ -199,7 +199,7 @@ def get_dashboard(
 # 📄 Endpoint para gerar e baixar o Relatório Fiscal DOCX
 # ------------------------------------------------------
 from fastapi.responses import FileResponse
-from ..services.report_docx import gerar_relatorio_fiscal  # já existente
+from ..services.report_docx import gerar_relatorio_fiscal
 
 @router.get("/relatorio-fiscal")
 def gerar_relatorio_fiscal_endpoint(
@@ -223,6 +223,7 @@ def gerar_relatorio_fiscal_endpoint(
         result = run_analysis_from_bytes(zip_bytes, aliquota, imposto_pago)
 
         # 🔎 Debug temporário — MOSTRA NO LOG DO RENDER
+        print("DEBUG RESULT KEYS:", result.keys())
         print("DEBUG RESULT tax_summary:", result.get("tax_summary"))
 
         # 3️⃣ Define nome amigável
@@ -242,10 +243,8 @@ def gerar_relatorio_fiscal_endpoint(
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     except Exception as e:
+        import traceback
         print(f"❌ Erro ao gerar relatório fiscal: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail="Erro ao gerar relatório fiscal")
 
-        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
-    except Exception as e:
-        print(f"❌ Erro ao gerar relatório fiscal: {e}")
-        raise HTTPException(status_code=500, detail="Erro ao gerar relatório fiscal")
