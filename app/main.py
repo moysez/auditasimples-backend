@@ -11,8 +11,8 @@ from .db import Base, engine, get_session
 
 # 🧾 Relatório DOCX
 from fastapi.responses import FileResponse
-from services.analysis import run_analysis_from_bytes
-from services.report_docx import gerar_relatorio_fiscal
+from app.services.analysis import run_analysis_from_bytes
+from app.services.report_docx import gerar_relatorio_fiscal
 
 # 🔐 Autenticação
 from .auth import router as auth_router
