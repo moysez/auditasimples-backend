@@ -133,24 +133,40 @@ def get_dashboard(
         # -----------------------------
         # Ajuste no cálculo tributário
         # -----------------------------
-        tax = result.get("tax_summary", {})
+        # ✅ Evitar que campos numéricos sejam None
+        tax = result.get("tax_summary") or {}
+        
+        # substitui None por 0.0 de forma segura
+        for campo in [
+            "faturamento", "base_corrigida", "receita_excluida",
+            "imposto_pago", "imposto_corrigido", "economia_estimada", "aliquota_utilizada"
+        ]:
+            if tax.get(campo) is None:
+                tax[campo] = 0.0
+        
+        # reatribui no result para que o report_docx receba os valores corrigidos
+        result["tax_summary"] = tax
+        
+        # ✅ agora o print está indentado corretamente
+        print("✅ Tax summary sanitizado:", tax)
+        
         faturamento = tax.get("faturamento", result.get("total_value_sum", 0.0))
         base_corrigida = tax.get("base_corrigida", 0.0)
         receita_excluida = tax.get("receita_excluida", 0.0)
         imposto_corrigido = base_corrigida * aliquota
         imposto_pago_valor = imposto_pago or 0.0
-
-        economia_estimada = 0.0
-        valor_a_pagar = 0.0
-
-        if imposto_pago is not None:
-            diferenca = imposto_pago_valor - imposto_corrigido
-            if diferenca >= 0:
-                economia_estimada = round(diferenca, 2)
-            else:
-                valor_a_pagar = round(abs(diferenca), 2)
-        else:
-            economia_estimada = round(receita_excluida * aliquota, 2)
+        
+                economia_estimada = 0.0
+                valor_a_pagar = 0.0
+        
+                if imposto_pago is not None:
+                    diferenca = imposto_pago_valor - imposto_corrigido
+                    if diferenca >= 0:
+                        economia_estimada = round(diferenca, 2)
+                    else:
+                        valor_a_pagar = round(abs(diferenca), 2)
+                else:
+                    economia_estimada = round(receita_excluida * aliquota, 2)
 
         # -----------------------------
         # Resposta
