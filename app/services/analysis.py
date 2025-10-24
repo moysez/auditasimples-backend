@@ -130,7 +130,7 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
         'imposto_corrigido': imposto_corrigido,
         'economia_estimada': economia_estimada,
         'aliquota_utilizada': aliquota if aliquota is not None else (imposto_pago / faturamento if faturamento else 0),
-        'imposto_pago': imposto_pago,
+        'imposto_pago': imposto_pago or 0.0,
         'imposto_pago_informado': imposto_pago,
     }
 
