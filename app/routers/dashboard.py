@@ -196,10 +196,14 @@ def get_dashboard(
         }
 
     except FileNotFoundError:
+        logger.warning(f"Arquivo ZIP não encontrado para upload_id={upload_id}, client_id={client_id}")
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+
     except Exception as e:
-        logger.exception(f"❌ Erro no dashboard: {e}")
-        raise HTTPException(status_code=500, detail="Erro ao carregar dados do dashboard")
+        import traceback
+        logger.exception(f"❌ Erro inesperado ao gerar relatório fiscal (client_id={client_id}, upload_id={upload_id}): {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar relatório fiscal: {str(e)}")
 
 
 # ------------------------------------------------------
