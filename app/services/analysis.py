@@ -1,7 +1,7 @@
+from __future__ import annotations
 from docx import Document
 from docx.shared import Pt
 from datetime import datetime
-from __future__ import annotations
 from typing import Dict, Any
 import io
 import zipfile
