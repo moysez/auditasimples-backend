@@ -222,11 +222,15 @@ def gerar_relatorio_fiscal_endpoint(
         # 2️⃣ Executa análise fiscal
         result = run_analysis_from_bytes(zip_bytes, aliquota, imposto_pago)
 
+        # 🔎 Debug temporário — MOSTRA NO LOG DO RENDER
+        print("DEBUG RESULT tax_summary:", result.get("tax_summary"))
+
         # 3️⃣ Define nome amigável
         client_name = nome_empresa or f"Cliente_{client_id}"
 
         # 4️⃣ Gera o relatório DOCX
         path = gerar_relatorio_fiscal(result, client_name)
+        print("📄 PATH GERADO:", path)
 
         # 5️⃣ Retorna para download
         return FileResponse(
@@ -236,6 +240,11 @@ def gerar_relatorio_fiscal_endpoint(
         )
 
     except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+    except Exception as e:
+        print(f"❌ Erro ao gerar relatório fiscal: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao gerar relatório fiscal")
+
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     except Exception as e:
         print(f"❌ Erro ao gerar relatório fiscal: {e}")
