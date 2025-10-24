@@ -93,7 +93,7 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
                         totals['erros_ncm_categoria'] += 1
 
                 # 🚨 Conta ST incorreto
-                if not (cfop == "5405" and csosn == "500"):
+                if is_mono and not (cfop == "5405" and csosn == "500"):
                     totals['st_incorreta'] += 1
 
     # 🕒 Converter datas
