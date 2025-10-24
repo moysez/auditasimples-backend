@@ -195,3 +195,48 @@ def get_dashboard(
     except Exception as e:
         print(f"❌ Erro no dashboard: {e}")
         raise HTTPException(status_code=500, detail="Erro ao carregar dados do dashboard")
+# ------------------------------------------------------
+# 📄 Endpoint para gerar e baixar o Relatório Fiscal DOCX
+# ------------------------------------------------------
+from fastapi.responses import FileResponse
+from ..services.report_docx import gerar_relatorio_fiscal  # já existente
+
+@router.get("/relatorio-fiscal")
+def gerar_relatorio_fiscal_endpoint(
+    client_id: int = Query(...),
+    upload_id: int = Query(...),
+    nome_empresa: str | None = Query(None, description="Nome da empresa opcional para personalizar o relatório"),
+    aliquota: float | None = Query(None),
+    imposto_pago: float | None = Query(None),
+    db: Session = Depends(get_session)
+):
+    """
+    Gera e retorna um relatório fiscal em formato DOCX para download.
+    """
+    try:
+        # 1️⃣ Lê o arquivo ZIP do banco
+        zip_bytes = get_zip_bytes_from_db(upload_id, db)
+        if not zip_bytes:
+            raise FileNotFoundError("Arquivo não encontrado")
+
+        # 2️⃣ Executa análise fiscal
+        result = run_analysis_from_bytes(zip_bytes, aliquota, imposto_pago)
+
+        # 3️⃣ Define nome amigável
+        client_name = nome_empresa or f"Cliente_{client_id}"
+
+        # 4️⃣ Gera o relatório DOCX
+        path = gerar_relatorio_fiscal(result, client_name)
+
+        # 5️⃣ Retorna para download
+        return FileResponse(
+            path,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename=f"Relatorio_Fiscal_Auditoria_Monofasica_{client_name}.docx"
+        )
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+    except Exception as e:
+        print(f"❌ Erro ao gerar relatório fiscal: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao gerar relatório fiscal")
