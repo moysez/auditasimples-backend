@@ -1,3 +1,4 @@
+import logging
 from collections import defaultdict
 from pathlib import Path
 import json
@@ -9,6 +10,15 @@ from rapidfuzz import fuzz
 from ..db import get_session
 from ..services.analysis import run_analysis_from_bytes
 from ..routers.uploads import get_zip_bytes_from_db
+from fastapi.responses import FileResponse
+from ..services.report_docx import gerar_relatorio_fiscal
+
+# 🧭 Configuração de logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+)
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -26,22 +36,17 @@ def load_monofasicos_map() -> dict:
     try:
         with open(MONOFASICOS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-        # normaliza para lower
         return {cat.lower(): [p.lower() for p in palavras] for cat, palavras in data.items()}
     except Exception as e:
-        print(f"⚠️ Erro ao carregar monofasicos.json: {e}")
+        logger.error(f"⚠️ Erro ao carregar monofasicos.json: {e}")
         return {}
 
 def match_descricao_categoria(descricao: str, mapa: dict, limiar: int = 80):
-    """
-    Faz fuzzy por categoria. Percorre cada categoria e suas palavras.
-    Retorna: (True/False, categoria, palavra, score)
-    """
     if not descricao:
         return False, None, None, 0
 
     desc = descricao.lower()
-    melhor = (False, None, None, 0)  # (hit, categoria, palavra, score)
+    melhor = (False, None, None, 0)
 
     for categoria, palavras in mapa.items():
         for kw in palavras:
@@ -52,7 +57,7 @@ def match_descricao_categoria(descricao: str, mapa: dict, limiar: int = 80):
     return melhor
 
 # -----------------------------
-# Endpoint
+# Endpoint principal
 # -----------------------------
 @router.get("/")
 def get_dashboard(
@@ -63,25 +68,24 @@ def get_dashboard(
     db: Session = Depends(get_session)
 ):
     try:
-        # Normaliza alíquota (0.08 ou 8 → 0.08)
+        # Normaliza alíquota
         if aliquota is None:
             aliquota = 0.08
         elif aliquota > 1:
             aliquota = aliquota / 100.0
 
-        # Lê ZIP do banco
+        # Lê ZIP
         zip_bytes = get_zip_bytes_from_db(upload_id, db)
         if not zip_bytes:
             raise FileNotFoundError("Arquivo não encontrado")
 
-        # Análise base (já calcula faturamento, exclusões, etc.)
         result = run_analysis_from_bytes(zip_bytes, aliquota, imposto_pago)
 
         # -----------------------------
         # IA por descrição COM CATEGORIA
         # -----------------------------
         mapa = load_monofasicos_map()
-        produtos = result.get("products", [])  # lista de itens com descrição e valor_total
+        produtos = result.get("products", [])
         monofasico_desc_count = 0
 
         cat_counter = defaultdict(int)
@@ -104,7 +108,6 @@ def get_dashboard(
                         "valor": valor,
                     })
 
-            # dedup
             key = (descricao or "").strip().lower()
             if key not in produtos_dedup:
                 produtos_dedup[key] = {
@@ -133,44 +136,35 @@ def get_dashboard(
         # -----------------------------
         # Ajuste no cálculo tributário
         # -----------------------------
-        # ✅ Evitar que campos numéricos sejam None
         tax = result.get("tax_summary") or {}
-        
-        # substitui None por 0.0 de forma segura
         for campo in [
             "faturamento", "base_corrigida", "receita_excluida",
             "imposto_pago", "imposto_corrigido", "economia_estimada", "aliquota_utilizada"
         ]:
             if tax.get(campo) is None:
                 tax[campo] = 0.0
-        
-        # reatribui no result para que o report_docx receba os valores corrigidos
+
         result["tax_summary"] = tax
-        
-        # ✅ agora o print está indentado corretamente
-        print("✅ Tax summary sanitizado:", tax)
-        
+        logger.info(f"✅ Tax summary sanitizado: {tax}")
+
         faturamento = tax.get("faturamento", result.get("total_value_sum", 0.0))
         base_corrigida = tax.get("base_corrigida", 0.0)
         receita_excluida = tax.get("receita_excluida", 0.0)
         imposto_corrigido = base_corrigida * aliquota
         imposto_pago_valor = imposto_pago or 0.0
-        
-                economia_estimada = 0.0
-                valor_a_pagar = 0.0
-        
-                if imposto_pago is not None:
-                    diferenca = imposto_pago_valor - imposto_corrigido
-                    if diferenca >= 0:
-                        economia_estimada = round(diferenca, 2)
-                    else:
-                        valor_a_pagar = round(abs(diferenca), 2)
-                else:
-                    economia_estimada = round(receita_excluida * aliquota, 2)
 
-        # -----------------------------
-        # Resposta
-        # -----------------------------
+        economia_estimada = 0.0
+        valor_a_pagar = 0.0
+
+        if imposto_pago is not None:
+            diferenca = imposto_pago_valor - imposto_corrigido
+            if diferenca >= 0:
+                economia_estimada = round(diferenca, 2)
+            else:
+                valor_a_pagar = round(abs(diferenca), 2)
+        else:
+            economia_estimada = round(receita_excluida * aliquota, 2)
+
         return {
             "cards": {
                 "documentos": result.get("documents", 0),
@@ -179,20 +173,15 @@ def get_dashboard(
                 "economia_simulada": economia_estimada,
                 "periodo": f"{result.get('period_start')} - {result.get('period_end')}"
             },
-"erros_fiscais": {
-    # alias novo (rótulo correto) apontando para o mesmo valor
-    "monofasico_ncm_incorreto": result.get("monofasico_sem_ncm", 0),
-
-    # campo antigo mantido por compatibilidade (pode remover depois)
-    "monofasico_sem_ncm": result.get("monofasico_sem_ncm", 0),
-
-    "monofasico_desc": monofasico_desc_count,
-    "st_corretos": result.get("st_cfop_csosn_corretos", 0),
-    "st_incorretos": result.get("st_incorreta", 0),
-
-    "categorias_detectadas": categorias_detectadas,
-    "produtos_duplicados": produtos_dedup_list,
-},
+            "erros_fiscais": {
+                "monofasico_ncm_incorreto": result.get("monofasico_sem_ncm", 0),
+                "monofasico_sem_ncm": result.get("monofasico_sem_ncm", 0),
+                "monofasico_desc": monofasico_desc_count,
+                "st_corretos": result.get("st_cfop_csosn_corretos", 0),
+                "st_incorretos": result.get("st_incorreta", 0),
+                "categorias_detectadas": categorias_detectadas,
+                "produtos_duplicados": produtos_dedup_list,
+            },
             "tributario": {
                 "faturamento": round(faturamento, 2),
                 "base_atual": round(faturamento, 2),
@@ -209,14 +198,13 @@ def get_dashboard(
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     except Exception as e:
-        print(f"❌ Erro no dashboard: {e}")
+        logger.exception(f"❌ Erro no dashboard: {e}")
         raise HTTPException(status_code=500, detail="Erro ao carregar dados do dashboard")
+
+
 # ------------------------------------------------------
 # 📄 Endpoint para gerar e baixar o Relatório Fiscal DOCX
 # ------------------------------------------------------
-from fastapi.responses import FileResponse
-from ..services.report_docx import gerar_relatorio_fiscal
-
 @router.get("/relatorio-fiscal")
 def gerar_relatorio_fiscal_endpoint(
     client_id: int = Query(...),
@@ -226,30 +214,21 @@ def gerar_relatorio_fiscal_endpoint(
     imposto_pago: float | None = Query(None),
     db: Session = Depends(get_session)
 ):
-    """
-    Gera e retorna um relatório fiscal em formato DOCX para download.
-    """
     try:
-        # 1️⃣ Lê o arquivo ZIP do banco
         zip_bytes = get_zip_bytes_from_db(upload_id, db)
         if not zip_bytes:
             raise FileNotFoundError("Arquivo não encontrado")
 
-        # 2️⃣ Executa análise fiscal
         result = run_analysis_from_bytes(zip_bytes, aliquota, imposto_pago)
 
-        # 🔎 Debug temporário — MOSTRA NO LOG DO RENDER
-        print("DEBUG RESULT KEYS:", result.keys())
-        print("DEBUG RESULT tax_summary:", result.get("tax_summary"))
+        logger.info(f"DEBUG RESULT KEYS: {result.keys()}")
+        logger.info(f"DEBUG RESULT tax_summary: {result.get('tax_summary')}")
 
-        # 3️⃣ Define nome amigável
         client_name = nome_empresa or f"Cliente_{client_id}"
-
-        # 4️⃣ Gera o relatório DOCX
         path = gerar_relatorio_fiscal(result, client_name)
-        print("📄 PATH GERADO:", path)
 
-        # 5️⃣ Retorna para download
+        logger.info(f"📄 Relatório gerado em: {path}")
+
         return FileResponse(
             path,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -259,8 +238,5 @@ def gerar_relatorio_fiscal_endpoint(
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     except Exception as e:
-        import traceback
-        print(f"❌ Erro ao gerar relatório fiscal: {e}")
-        traceback.print_exc()
+        logger.exception(f"❌ Erro ao gerar relatório fiscal: {e}")
         raise HTTPException(status_code=500, detail="Erro ao gerar relatório fiscal")
-
