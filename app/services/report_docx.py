@@ -48,14 +48,15 @@ def gerar_relatorio_fiscal(totals: dict, client_name: str = "Cliente", cnpj: str
     # 📊 RESUMO TRIBUTÁRIO
     # ==============================
     doc.add_heading('2. RESUMO TRIBUTÁRIO', level=1)
-    trib = totals.get('tax_summary', {})
-    faturamento = trib.get('faturamento', 0)
-    receita_excluida = trib.get('receita_excluida', 0)
-    base_corrigida = trib.get('base_corrigida', 0)
-    imposto_pago = trib.get('imposto_pago', 0)
-    imposto_corrigido = trib.get('imposto_corrigido', 0)
-    economia = trib.get('economia_estimada', 0)
-    aliquota = trib.get('aliquota_utilizada', 0) * 100
+    trib = totals.get('tax_summary') or {}
+    faturamento = trib.get('faturamento') or 0.0
+    receita_excluida = trib.get('receita_excluida') or 0.0
+    base_corrigida = trib.get('base_corrigida') or 0.0
+    imposto_pago = trib.get('imposto_pago') or 0.0
+    imposto_corrigido = trib.get('imposto_corrigido') or 0.0
+    economia = trib.get('economia_estimada') or 0.0
+    aliquota = (trib.get('aliquota_utilizada') or 0.0) * 100
+
 
     table = doc.add_table(rows=1, cols=2)
     table.style = 'Table Grid'
