@@ -8,6 +8,16 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.shared import OxmlElement
 
+def _add_row(tbl, label, value):
+    """
+    Adiciona uma linha a uma tabela Word com duas colunas:
+    - Coluna 1: label (texto à esquerda)
+    - Coluna 2: value (texto à direita)
+    """
+    r = tbl.add_row().cells
+    r[0].text = str(label) if label is not None else ""
+    r[1].text = str(value) if value is not None else ""
+
 # ==========================
 # Utilitários internos
 # ==========================
