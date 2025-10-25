@@ -44,9 +44,9 @@ def _fmt_percent(v: Any) -> str:
                 tcPr.append(tcBorders)
     
     def _add_row(tbl, label, value):
-    r = tbl.add_row().cells
-    r[0].text = str(label)
-    r[1].text = str(value)
+        r = tbl.add_row().cells
+        r[0].text = str(label)
+        r[1].text = str(value)
 
 
 # ==========================
