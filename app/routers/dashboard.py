@@ -80,6 +80,7 @@ def get_dashboard(
             raise FileNotFoundError("Arquivo não encontrado no banco")
 
         result = run_analysis_from_bytes(zip_bytes, aliquota, imposto_pago)
+        # 🔁 Mantém compatibilidade com geração de relatório
 
         # -----------------------------
         # IA por descrição COM CATEGORIA
@@ -152,7 +153,15 @@ def get_dashboard(
         receita_excluida = tax.get("receita_excluida", 0.0)
         imposto_corrigido = base_corrigida * aliquota
         imposto_pago_valor = imposto_pago or 0.0
-
+        result["tax_summary"] = {
+            "faturamento": faturamento,
+            "base_corrigida": base_corrigida,
+            "receita_excluida": receita_excluida,
+            "imposto_pago": imposto_pago_valor,
+            "imposto_corrigido": imposto_corrigido,
+            "economia_estimada": economia_estimada,
+            "aliquota_utilizada": aliquota,
+        }
         economia_estimada = 0.0
         valor_a_pagar = 0.0
 
