@@ -154,17 +154,15 @@ def get_dashboard(
         imposto_corrigido = base_corrigida * aliquota
         imposto_pago_valor = imposto_pago or 0.0
         result["tax_summary"] = {
-            "faturamento": faturamento,
-            "base_corrigida": base_corrigida,
-            "receita_excluida": receita_excluida,
-            "imposto_pago": imposto_pago_valor,
-            "imposto_corrigido": imposto_corrigido,
-            "economia_estimada": economia_estimada,
-            "aliquota_utilizada": aliquota,
-        }
+        faturamento = tax.get("faturamento", result.get("total_value_sum", 0.0))
+        base_corrigida = tax.get("base_corrigida", 0.0)
+        receita_excluida = tax.get("receita_excluida", 0.0)
+        imposto_corrigido = base_corrigida * aliquota
+        imposto_pago_valor = imposto_pago or 0.0
+        
         economia_estimada = 0.0
         valor_a_pagar = 0.0
-
+        
         if imposto_pago is not None:
             diferenca = imposto_pago_valor - imposto_corrigido
             if diferenca >= 0:
@@ -173,7 +171,18 @@ def get_dashboard(
                 valor_a_pagar = round(abs(diferenca), 2)
         else:
             economia_estimada = round(receita_excluida * aliquota, 2)
-
+        
+        # ✅ Apenas UMA definição de tax_summary — após os cálculos
+        result["tax_summary"] = {
+            "faturamento": faturamento,
+            "base_corrigida": base_corrigida,
+            "receita_excluida": receita_excluida,
+            "imposto_pago": imposto_pago_valor,
+            "imposto_corrigido": imposto_corrigido,
+            "economia_estimada": economia_estimada,
+            "aliquota_utilizada": aliquota,
+        }
+        logger.info(f"🧪 TAX SUMMARY FINAL: {result['tax_summary']}")
         return {
             "cards": {
                 "documentos": result.get("documents", 0),
