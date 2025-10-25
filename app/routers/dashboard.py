@@ -60,6 +60,7 @@ def match_descricao_categoria(descricao: str, mapa: dict, limiar: int = 80):
 # Endpoint principal do Dashboard
 # -----------------------------
 @router.get("/")
+@router.get("/")
 def get_dashboard(
     client_id: int = Query(...),
     upload_id: int = Query(...),
@@ -80,7 +81,6 @@ def get_dashboard(
             raise FileNotFoundError("Arquivo não encontrado no banco")
 
         result = run_analysis_from_bytes(zip_bytes, aliquota, imposto_pago)
-        # 🔁 Mantém compatibilidade com geração de relatório
 
         # -----------------------------
         # IA por descrição COM CATEGORIA
@@ -145,24 +145,15 @@ def get_dashboard(
             if tax.get(campo) is None:
                 tax[campo] = 0.0
 
-        result["tax_summary"] = tax
-        logger.info(f"✅ Tax summary sanitizado: {tax}")
+        faturamento = tax.get("faturamento", result.get("total_value_sum", 0.0))
+        base_corrigida = tax.get("base_corrigida", 0.0)
+        receita_excluida = tax.get("receita_excluida", 0.0)
+        imposto_corrigido = base_corrigida * aliquota
+        imposto_pago_valor = imposto_pago or 0.0
 
-        faturamento = tax.get("faturamento", result.get("total_value_sum", 0.0))
-        base_corrigida = tax.get("base_corrigida", 0.0)
-        receita_excluida = tax.get("receita_excluida", 0.0)
-        imposto_corrigido = base_corrigida * aliquota
-        imposto_pago_valor = imposto_pago or 0.0
-        result["tax_summary"] = {
-        faturamento = tax.get("faturamento", result.get("total_value_sum", 0.0))
-        base_corrigida = tax.get("base_corrigida", 0.0)
-        receita_excluida = tax.get("receita_excluida", 0.0)
-        imposto_corrigido = base_corrigida * aliquota
-        imposto_pago_valor = imposto_pago or 0.0
-        
         economia_estimada = 0.0
         valor_a_pagar = 0.0
-        
+
         if imposto_pago is not None:
             diferenca = imposto_pago_valor - imposto_corrigido
             if diferenca >= 0:
@@ -171,7 +162,7 @@ def get_dashboard(
                 valor_a_pagar = round(abs(diferenca), 2)
         else:
             economia_estimada = round(receita_excluida * aliquota, 2)
-        
+
         # ✅ Apenas UMA definição de tax_summary — após os cálculos
         result["tax_summary"] = {
             "faturamento": faturamento,
@@ -181,9 +172,10 @@ def get_dashboard(
             "imposto_corrigido": imposto_corrigido,
             "economia_estimada": economia_estimada,
             "aliquota_utilizada": aliquota,
-            }
-            logger.info(f"🧪 TAX SUMMARY FINAL: {result['tax_summary']}")
         }
+
+        logger.info(f"🧪 TAX SUMMARY FINAL: {result['tax_summary']}")
+
         return {
             "cards": {
                 "documentos": result.get("documents", 0),
@@ -223,7 +215,6 @@ def get_dashboard(
         logger.exception(f"❌ Erro inesperado ao gerar dashboard (client_id={client_id}, upload_id={upload_id})")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro ao gerar relatório fiscal: {str(e)}")
-
 
 # ------------------------------------------------------
 # 📄 Endpoint para gerar e baixar o Relatório Fiscal DOCX
