@@ -1,177 +1,136 @@
-import os
 import logging
-logger = logging.getLogger(__name__)
 from datetime import datetime
+from pathlib import Path
+
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
-from docx.oxml.shared import OxmlElement
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-def _format_table(table):
-    """Adiciona bordas e estilo visual às tabelas."""
-    for row in table.rows:
-        for cell in row.cells:
-            tc = cell._tc
-            tcPr = tc.get_or_add_tcPr()
-            tcBorders = OxmlElement('w:tcBorders')
-            for border_name in ('top', 'left', 'bottom', 'right'):
-                border_el = OxmlElement(f'w:{border_name}')
-                border_el.set('w:val', 'single')
-                border_el.set('w:sz', '8')
-                border_el.set('w:space', '0')
-                border_el.set('w:color', '000000')
-                tcBorders.append(border_el)
-            tcPr.append(tcBorders)
+logger = logging.getLogger(__name__)
 
-def gerar_relatorio_fiscal(totals: dict, client_name: str = "Cliente", cnpj: str = "00.000.000/0000-00"):
+# Pasta onde os relatórios serão salvos
+REPORTS_DIR = Path("/tmp/relatorios_fiscais")
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# -------------------------
+# Funções auxiliares
+# -------------------------
+def safe_float(value):
+    """Converte valor para float, retornando 0.0 em caso de None ou inválido."""
     try:
-        logger.info(f"📄 Iniciando geração do DOCX para cliente={client_name} | Totais: {totals}")
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
 
-        doc = Document()
-        data_atual = datetime.now().strftime('%d/%m/%Y')
 
-        # ==============================
-        # 📌 CAPA / TÍTULO
-        # ==============================
-        title = doc.add_heading('Relatório Fiscal — Auditoria Monofásica (Simples Nacional)', 0)
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+def add_heading(doc, text, level=1):
+    p = doc.add_heading(text, level)
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-        subt = doc.add_paragraph(f"{client_name} | CNPJ: {cnpj}")
-        subt.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        subt.runs[0].bold = True
 
-        doc.add_paragraph(f"Período: {totals.get('period_start', '---')} a {totals.get('period_end', '---')}", style='Normal').alignment = WD_ALIGN_PARAGRAPH.CENTER
-        doc.add_paragraph(f"Data da análise: {data_atual}", style='Normal').alignment = WD_ALIGN_PARAGRAPH.CENTER
+def add_paragraph(doc, text, bold=False):
+    p = doc.add_paragraph()
+    run = p.add_run(str(text))
+    if bold:
+        run.bold = True
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-        doc.add_paragraph("\n")
 
-        # ==============================
-        # 📊 RESUMO TRIBUTÁRIO
-        # ==============================
-        doc.add_heading('2. RESUMO TRIBUTÁRIO', level=1)
-        trib = totals.get('tax_summary') or {}
+def add_key_value(doc, key, value):
+    p = doc.add_paragraph()
+    p.add_run(f"{key}: ").bold = True
+    p.add_run(str(value))
 
-        def safe_float(value):
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                return 0.0
-        
-        faturamento = safe_float(trib.get('faturamento'))
-        receita_excluida = safe_float(trib.get('receita_excluida'))
-        base_corrigida = safe_float(trib.get('base_corrigida'))
-        imposto_pago = safe_float(trib.get('imposto_pago'))
-        imposto_corrigido = safe_float(trib.get('imposto_corrigido'))
-        economia = safe_float(trib.get('economia_estimada'))
-        aliquota = safe_float(trib.get('aliquota_utilizada')) * 100
 
-        table = doc.add_table(rows=1, cols=2)
-        table.style = 'Table Grid'
-        hdr = table.rows[0].cells
-        hdr[0].text = "Descrição"
-        hdr[1].text = "Valor (R$)"
-        hdr[0].paragraphs[0].runs[0].bold = True
-        hdr[1].paragraphs[0].runs[0].bold = True
+# -------------------------
+# Função principal
+# -------------------------
+def gerar_relatorio_fiscal(totals: dict, client_name: str) -> str:
+    """
+    Gera o relatório fiscal DOCX com base nos dados agregados de análise tributária.
+    """
 
-        def add_row(desc, val):
-            row = table.add_row().cells
-            row[0].text = desc
-            p = row[1].paragraphs[0]
-            p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            p.add_run(f"{val:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    trib = totals.get('tax_summary') or {}
 
-        add_row("Faturamento Bruto", faturamento)
-        add_row("Receita Monofásica Excluída", receita_excluida)
-        add_row("Base Corrigida", base_corrigida)
-        add_row("Alíquota utilizada (%)", aliquota)
-        add_row("Imposto Pago (informado)", imposto_pago)
-        add_row("Imposto Corrigido (simulado)", imposto_corrigido)
-        add_row("Economia Potencial", economia)
+    # Sanitiza valores numéricos
+    faturamento = safe_float(trib.get('faturamento'))
+    receita_excluida = safe_float(trib.get('receita_excluida'))
+    base_corrigida = safe_float(trib.get('base_corrigida'))
+    imposto_pago = safe_float(trib.get('imposto_pago'))
+    imposto_corrigido = safe_float(trib.get('imposto_corrigido'))
+    economia = safe_float(trib.get('economia_estimada'))
+    aliquota = safe_float(trib.get('aliquota_utilizada')) * 100
 
-        _format_table(table)
-        doc.add_paragraph("\n")
+    # Log de depuração
+    logger.info(f"[DEBUG DOCX] faturamento={faturamento}, receita_excluida={receita_excluida}, "
+                f"base_corrigida={base_corrigida}, imposto_corrigido={imposto_corrigido}, aliquota={aliquota}")
 
-        # ==============================
-        # 🧠 CATEGORIAS MONOFÁSICAS
-        # ==============================
-        doc.add_heading('3. PRODUTOS MONOFÁSICOS IDENTIFICADOS', level=1)
-        categorias = totals.get("categorias_detectadas", [])
-        if categorias:
-            cat_table = doc.add_table(rows=1, cols=4)
-            hdr2 = cat_table.rows[0].cells
-            hdr2[0].text = "Categoria"
-            hdr2[1].text = "Ocorrências"
-            hdr2[2].text = "Receita Total (R$)"
-            hdr2[3].text = "Exemplos"
-            for h in hdr2:
-                h.paragraphs[0].runs[0].bold = True
-            for cat in categorias:
-                exemplos = ", ".join([e["descricao"] for e in cat["exemplos"][:3]])
-                total_val = sum([e["valor"] for e in cat["exemplos"]])
-                row = cat_table.add_row().cells
-                row[0].text = cat["categoria"].capitalize()
-                row[1].text = str(cat["ocorrencias"])
-                row[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
-                row[2].text = f"{total_val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                row[3].text = exemplos
-            _format_table(cat_table)
-        else:
-            doc.add_paragraph("Nenhuma categoria monofásica identificada.")
+    # Evita divisão por zero
+    economia_percent = (economia / faturamento * 100) if faturamento else 0.0
 
-        doc.add_paragraph("\n")
+    # -------------------------
+    # Montagem do DOCX
+    # -------------------------
+    doc = Document()
 
-        # ==============================
-        # ⚖️ FUNDAMENTAÇÃO LEGAL
-        # ==============================
-        doc.add_heading('4. FUNDAMENTAÇÃO LEGAL', level=1)
-        doc.add_paragraph("• Lei nº 10.147/2000 — estabelece o regime monofásico de PIS/COFINS.")
-        doc.add_paragraph("• Lei Complementar nº 123/2006 — art. 18 § 4º-A.")
-        doc.add_paragraph("• Resolução CGSN nº 140/2018 — art. 25, § 4º.")
-        doc.add_paragraph("• Conclusão: A receita decorrente da revenda de produtos sujeitos à tributação monofásica deve ser excluída da base de cálculo do DAS.")
-        doc.add_paragraph("\n")
+    # Título
+    title = doc.add_heading(f"Relatório Fiscal - {client_name}", 0)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-        # ==============================
-        # 📈 ESTIMATIVA
-        # ==============================
-        doc.add_heading('5. ESTIMATIVA DE RESTITUIÇÃO', level=1)
-        economia_anual = economia * 12
-        p1 = doc.add_paragraph(f"💰 R$ {economia:,.2f} por mês (estimado)".replace(",", "X").replace(".", ",").replace("X", "."))
-        p1.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p2 = doc.add_paragraph(f"📅 Em um ano: R$ {economia_anual:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        doc.add_paragraph("\n")
+    doc.add_paragraph(f"Data de geração: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
 
-        # ==============================
-        # 🪜 PRÓXIMOS PASSOS
-        # ==============================
-        doc.add_heading('6. PRÓXIMOS PASSOS (SUGESTÃO)', level=1)
-        passos = [
-            "1. Conferência dos dados fiscais no PGDAS-D.",
-            "2. Correção retroativa de períodos (se aplicável).",
-            "3. Preparação de pedido de restituição/compensação.",
-            "4. Acompanhamento do processo até o reembolso."
-        ]
-        for p in passos:
-            doc.add_paragraph(p)
-        doc.add_paragraph("\n")
+    doc.add_heading("📊 Resumo Tributário", level=1)
+    add_key_value(doc, "Faturamento", f"R$ {faturamento:,.2f}")
+    add_key_value(doc, "Base Corrigida", f"R$ {base_corrigida:,.2f}")
+    add_key_value(doc, "Receita Excluída", f"R$ {receita_excluida:,.2f}")
+    add_key_value(doc, "Imposto Pago", f"R$ {imposto_pago:,.2f}")
+    add_key_value(doc, "Imposto Corrigido", f"R$ {imposto_corrigido:,.2f}")
+    add_key_value(doc, "Economia Estimada", f"R$ {economia:,.2f}")
+    add_key_value(doc, "Percentual de Economia", f"{economia_percent:.2f}%")
+    add_key_value(doc, "Alíquota Utilizada", f"{aliquota:.2f}%")
 
-        # ==============================
-        # ✍️ ASSINATURA
-        # ==============================
-        doc.add_heading('7. ASSINATURA DIGITAL', level=1)
-        doc.add_paragraph("[NOME DO RESPONSÁVEL]")
-        doc.add_paragraph("CRC / OAB / CNPJ")
-        doc.add_paragraph(f"Data: {data_atual}")
+    # -------------------------
+    # Itens e categorias detectadas
+    # -------------------------
+    produtos = totals.get("products", [])
+    categorias = totals.get("categorias_detectadas", [])
 
-        # 📂 Salvar
-        filename = f"Relatorio_Fiscal_Auditoria_Monofasica_{client_name.replace(' ', '_')}.docx"
-        path = os.path.join("/tmp", filename)
-        doc.save(path)
-        logger.info(f"✅ Relatório gerado com sucesso: {path}")
-        return path
+    doc.add_heading("📦 Produtos Analisados", level=1)
+    add_paragraph(doc, f"Total de itens analisados: {len(produtos)}")
 
-    except Exception as e:
-        import traceback
-        logger.exception(f"❌ Erro ao gerar relatório fiscal DOCX para '{client_name}': {e}")
-        traceback.print_exc()
-        raise
+    # Top 10 produtos mais relevantes
+    produtos_top = sorted(produtos, key=lambda x: float(x.get("valor_total", 0)), reverse=True)[:10]
+    for p in produtos_top:
+        desc = p.get("descricao") or p.get("xProd") or "N/A"
+        valor = safe_float(p.get("valor_total"))
+        add_paragraph(doc, f"{desc} — R$ {valor:,.2f}")
+
+    # Categorias
+    if categorias:
+        doc.add_heading("🏷 Categorias Detectadas (IA)", level=1)
+        for cat in categorias:
+            add_paragraph(doc, f"{cat.get('categoria')} — {cat.get('ocorrencias')} ocorrências")
+            exemplos = cat.get("exemplos", [])
+            for ex in exemplos:
+                add_paragraph(doc, f" • {ex.get('descricao')} (score {ex.get('score')})")
+
+    # -------------------------
+    # Rodapé
+    # -------------------------
+    doc.add_heading("📌 Observações", level=1)
+    add_paragraph(
+        doc,
+        "Este relatório foi gerado automaticamente com base nos documentos fiscais eletrônicos do cliente. "
+        "Os valores de economia estimada representam uma simulação com base na legislação vigente."
+    )
+
+    # -------------------------
+    # Salvamento
+    # -------------------------
+    safe_name = client_name.replace(" ", "_").replace("/", "_")
+    output_path = REPORTS_DIR / f"Relatorio_Fiscal_{safe_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+    doc.save(str(output_path))
+
+    logger.info(f"📄 Relatório fiscal gerado com sucesso: {output_path}")
+
+    return str(output_path)
