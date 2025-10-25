@@ -27,23 +27,23 @@ def _fmt_percent(v: Any) -> str:
     return f"{n:,.2f}%".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def _format_table_borders(table):
-    for row in table.rows:
-        for cell in row.cells:
-            tc = cell._tc
-            tcPr = tc.get_or_add_tcPr()
-            tcBorders = OxmlElement("w:tcBorders")
-            for b in ("top", "left", "bottom", "right"):
-                el = OxmlElement(f"w:{b}")
-                el.set("w:val", "single")
-                el.set("w:sz", "8")
-                el.set("w:space", "0")
-                el.set("w:color", "000000")
-                tcBorders.append(el)
-            tcPr.append(tcBorders)
-
-
-def _add_row(tbl, label, value):
+    def _format_table_borders(table):
+        for row in table.rows:
+            for cell in row.cells:
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcBorders = OxmlElement("w:tcBorders")
+                for b in ("top", "left", "bottom", "right"):
+                    el = OxmlElement(f"w:{b}")
+                    # AQUI: removido prefixo do atributo 'w:val'
+                    el.set("val", "single")
+                    el.set("sz", "8")
+                    el.set("space", "0")
+                    el.set("color", "000000")
+                    tcBorders.append(el)
+                tcPr.append(tcBorders)
+    
+    def _add_row(tbl, label, value):
     r = tbl.add_row().cells
     r[0].text = str(label)
     r[1].text = str(value)
