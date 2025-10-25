@@ -181,9 +181,9 @@ def get_dashboard(
             "imposto_corrigido": imposto_corrigido,
             "economia_estimada": economia_estimada,
             "aliquota_utilizada": aliquota,
+            }
+            logger.info(f"🧪 TAX SUMMARY FINAL: {result['tax_summary']}")
         }
-    }
-        logger.info(f"🧪 TAX SUMMARY FINAL: {result['tax_summary']}")
         return {
             "cards": {
                 "documentos": result.get("documents", 0),
