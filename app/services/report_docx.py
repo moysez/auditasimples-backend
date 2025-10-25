@@ -50,13 +50,20 @@ def gerar_relatorio_fiscal(totals: dict, client_name: str = "Cliente", cnpj: str
         # ==============================
         doc.add_heading('2. RESUMO TRIBUTÁRIO', level=1)
         trib = totals.get('tax_summary') or {}
-        faturamento = float(trib.get('faturamento') or 0.0)
-        receita_excluida = float(trib.get('receita_excluida') or 0.0)
-        base_corrigida = float(trib.get('base_corrigida') or 0.0)
-        imposto_pago = float(trib.get('imposto_pago') or 0.0)
-        imposto_corrigido = float(trib.get('imposto_corrigido') or 0.0)
-        economia = float(trib.get('economia_estimada') or 0.0)
-        aliquota = float(trib.get('aliquota_utilizada') or 0.0) * 100
+
+        def safe_float(value):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return 0.0
+        
+        faturamento = safe_float(trib.get('faturamento'))
+        receita_excluida = safe_float(trib.get('receita_excluida'))
+        base_corrigida = safe_float(trib.get('base_corrigida'))
+        imposto_pago = safe_float(trib.get('imposto_pago'))
+        imposto_corrigido = safe_float(trib.get('imposto_corrigido'))
+        economia = safe_float(trib.get('economia_estimada'))
+        aliquota = safe_float(trib.get('aliquota_utilizada')) * 100
 
         table = doc.add_table(rows=1, cols=2)
         table.style = 'Table Grid'
