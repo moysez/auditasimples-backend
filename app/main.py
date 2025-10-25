@@ -32,11 +32,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 🌐 CORS
+# 🌐 CORS — deve vir logo após criar o app
 origins = [
     "https://auditasimples.io",
     "https://www.auditasimples.io",
-    "http://localhost:5500"
+    "https://api.auditasimples.io",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500"
 ]
 
 app.add_middleware(
@@ -46,6 +48,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # 🧱 Banco de dados
 Base.metadata.create_all(bind=engine)
