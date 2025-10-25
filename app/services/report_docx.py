@@ -103,7 +103,7 @@ def gerar_relatorio_fiscal(
     # ==========================
     # CAPA
     # ==========================
-    h = doc.add_heading("Relatório Fiscal — Auditoria Monofásica (Simples Nacional)", 0)
+    h = doc.add_heading("Relatório de Auditoria Fiscal — (Simples Nacional)", 0)
     h.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p = doc.add_paragraph(f"{client_name}  |  CNPJ: {cnpj}")
     p.runs[0].bold = True
