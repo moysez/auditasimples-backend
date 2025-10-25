@@ -6,11 +6,11 @@ import json
 from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy.orm import Session
 from rapidfuzz import fuzz
+from fastapi.responses import FileResponse
 
 from ..db import get_session
 from ..services.analysis import run_analysis_from_bytes
 from ..routers.uploads import get_zip_bytes_from_db
-from fastapi.responses import FileResponse
 from ..services.report_docx import gerar_relatorio_fiscal
 
 # 🧭 Configuração de logging
@@ -22,7 +22,7 @@ logging.basicConfig(
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
-# Caminho do dicionário
+# 📂 Caminho do dicionário
 MONOFASICOS_FILE = Path(__file__).resolve().parent.parent / "data" / "monofasicos.json"
 
 # -----------------------------
@@ -57,7 +57,7 @@ def match_descricao_categoria(descricao: str, mapa: dict, limiar: int = 80):
     return melhor
 
 # -----------------------------
-# Endpoint principal
+# Endpoint principal do Dashboard
 # -----------------------------
 @router.get("/")
 def get_dashboard(
@@ -74,10 +74,10 @@ def get_dashboard(
         elif aliquota > 1:
             aliquota = aliquota / 100.0
 
-        # Lê ZIP
+        # Lê ZIP do banco
         zip_bytes = get_zip_bytes_from_db(upload_id, db)
         if not zip_bytes:
-            raise FileNotFoundError("Arquivo não encontrado")
+            raise FileNotFoundError("Arquivo não encontrado no banco")
 
         result = run_analysis_from_bytes(zip_bytes, aliquota, imposto_pago)
 
@@ -201,7 +201,7 @@ def get_dashboard(
 
     except Exception as e:
         import traceback
-        logger.exception(f"❌ Erro inesperado ao gerar relatório fiscal (client_id={client_id}, upload_id={upload_id}): {e}")
+        logger.exception(f"❌ Erro inesperado ao gerar dashboard (client_id={client_id}, upload_id={upload_id})")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro ao gerar relatório fiscal: {str(e)}")
 
@@ -221,12 +221,15 @@ def gerar_relatorio_fiscal_endpoint(
     try:
         zip_bytes = get_zip_bytes_from_db(upload_id, db)
         if not zip_bytes:
-            raise FileNotFoundError("Arquivo não encontrado")
+            raise FileNotFoundError("Arquivo não encontrado no banco")
 
         result = run_analysis_from_bytes(zip_bytes, aliquota, imposto_pago)
 
-        logger.info(f"DEBUG RESULT KEYS: {result.keys()}")
-        logger.info(f"DEBUG RESULT tax_summary: {result.get('tax_summary')}")
+        if not result or len(result) == 0:
+            raise ValueError("Não foi possível gerar análise a partir dos arquivos.")
+
+        logger.info(f"🧾 DEBUG RESULT KEYS: {result.keys()}")
+        logger.info(f"📊 DEBUG tax_summary: {result.get('tax_summary')}")
 
         client_name = nome_empresa or f"Cliente_{client_id}"
         path = gerar_relatorio_fiscal(result, client_name)
@@ -240,7 +243,9 @@ def gerar_relatorio_fiscal_endpoint(
         )
 
     except FileNotFoundError:
+        logger.warning(f"Arquivo ZIP não encontrado (upload_id={upload_id})")
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+
     except Exception as e:
         logger.exception(f"❌ Erro ao gerar relatório fiscal: {e}")
-        raise HTTPException(status_code=500, detail="Erro ao gerar relatório fiscal")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar relatório fiscal: {str(e)}")
