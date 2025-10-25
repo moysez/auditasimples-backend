@@ -8,6 +8,28 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.shared import OxmlElement
 
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+
+def _format_table_borders(table):
+    """
+    Adiciona bordas simples em todas as células de uma tabela do Word.
+    """
+    tbl = table._tbl  # acesso ao elemento XML da tabela
+    tblBorders = OxmlElement('w:tblBorders')
+
+    for border_name in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+        border_el = OxmlElement(f'w:{border_name}')
+        border_el.set(qn('w:val'), 'single')
+        border_el.set(qn('w:sz'), '4')       # espessura
+        border_el.set(qn('w:space'), '0')
+        border_el.set(qn('w:color'), '000000')  # cor preta
+        tblBorders.append(border_el)
+
+    tblPr = tbl.tblPr
+    tblPr.append(tblBorders)
+
+
 def _add_row(tbl, label, value):
     """
     Adiciona uma linha a uma tabela Word com duas colunas:
