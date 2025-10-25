@@ -16,6 +16,12 @@ from app.services.report_docx import gerar_relatorio_fiscal
 
 # 🔐 Autenticação
 from .auth import router as auth_router
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+)
 
 # 🧠 Inicializa app
 app = FastAPI(
@@ -90,7 +96,7 @@ def gerar_relatorio(client_id: int):
 app.include_router(api)
 
 # 🧭 Log de rotas no console
-print("\n📜 ROTAS REGISTRADAS NO FASTAPI:")
+logger.info("📜 ROTAS REGISTRADAS NO FASTAPI:")
 for route in app.routes:
-    print(route.path)
-print("📜 FIM DAS ROTAS\n")
+    logger.info(route.path)
+logger.info("📜 FIM DAS ROTAS")
