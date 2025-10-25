@@ -182,6 +182,7 @@ def get_dashboard(
             "economia_estimada": economia_estimada,
             "aliquota_utilizada": aliquota,
         }
+    }
         logger.info(f"🧪 TAX SUMMARY FINAL: {result['tax_summary']}")
         return {
             "cards": {
