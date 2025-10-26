@@ -224,27 +224,44 @@ def gerar_relatorio_fiscal_endpoint(
     client_id: int = Query(...),
     upload_id: int = Query(...),
     nome_empresa: str | None = Query(None, description="Nome da empresa opcional para personalizar o relatório"),
-    aliquota: float | None = Query(None),
-    imposto_pago: float | None = Query(None),
+    aliquota: float | None = Query(None, description="Alíquota em % ou fração. Ex.: 8 ou 0.08"),
+    imposto_pago: float | None = Query(None, description="Valor do imposto pago em R$"),
     db: Session = Depends(get_session)
 ):
     try:
+        # 🔐 ZIP
         zip_bytes = get_zip_bytes_from_db(upload_id, db)
         if not zip_bytes:
             raise FileNotFoundError("Arquivo não encontrado no banco")
 
-        result = run_analysis_from_bytes(zip_bytes, aliquota, imposto_pago)
+        # ✅ Normalização segura
+        aliq_norm = None
+        if aliquota is not None:
+            aliq_norm = float(aliquota)
+            if aliq_norm > 1:          # 8 → 0.08
+                aliq_norm = aliq_norm / 100.0
 
-        if not result or len(result) == 0:
+        imp_pago_norm = None
+        if imposto_pago is not None:
+            imp_pago_norm = float(imposto_pago)
+
+        # 🧠 Regra de prioridade:
+        # - Se veio imposto_pago, usamos ele e ignoramos alíquota (para não recalcular o pago).
+        # - Caso contrário, usamos a alíquota (se existir) para estimar.
+        if imp_pago_norm is not None:
+            aliq_para_analise = None
+            imposto_para_analise = imp_pago_norm
+        else:
+            aliq_para_analise = aliq_norm
+            imposto_para_analise = None
+
+        result = run_analysis_from_bytes(zip_bytes, aliq_para_analise, imposto_para_analise)
+
+        if not result:
             raise ValueError("Não foi possível gerar análise a partir dos arquivos.")
-
-        logger.info(f"🧾 DEBUG RESULT KEYS: {result.keys()}")
-        logger.info(f"📊 DEBUG tax_summary: {result.get('tax_summary')}")
 
         client_name = nome_empresa or f"Cliente_{client_id}"
         path = gerar_relatorio_fiscal(result, client_name)
-
-        logger.info(f"📄 Relatório gerado em: {path}")
 
         return FileResponse(
             path,
@@ -253,9 +270,7 @@ def gerar_relatorio_fiscal_endpoint(
         )
 
     except FileNotFoundError:
-        logger.warning(f"Arquivo ZIP não encontrado (upload_id={upload_id})")
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
-
     except Exception as e:
         logger.exception(f"❌ Erro ao gerar relatório fiscal: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao gerar relatório fiscal: {str(e)}")
