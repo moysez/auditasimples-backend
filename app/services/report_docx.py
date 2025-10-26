@@ -23,7 +23,7 @@ def _fmt_money(v: Any) -> str:
 
 def _fmt_percent(frac: Any) -> str:
     try:
-        n = float(frac or 0.0) * 100.0
+        n = float(frac or 0.0) 
     except Exception:
         n = 0.0
     return f"{n:,.2f}%".replace(",", "X").replace(".", ",").replace("X", ".")
