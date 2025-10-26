@@ -71,7 +71,7 @@ def get_dashboard(
     try:
         # Normaliza alíquota
         if aliquota is None:
-            aliquota = 0.08
+            aliquota = 0.10
         elif aliquota > 1:
             aliquota = aliquota / 100.0
 
