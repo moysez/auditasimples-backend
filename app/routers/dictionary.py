@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 # Importa autenticação
-from ..auth import get_current_user  # ✅ importante: já existente no seu projeto
+from ..routers.auth import get_current_user
 
 # 📍 Caminho do arquivo do dicionário
 DICTIONARY_FILE = Path(__file__).resolve().parent.parent / "data" / "monofasicos.json"
