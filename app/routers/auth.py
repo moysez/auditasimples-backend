@@ -4,10 +4,10 @@ from jose import jwt
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 from fastapi.security import OAuth2PasswordBearer
+from passlib.context import CryptContext  # ✅ Novo import
 
 from ..db import get_session
 from ..models.user import User
-from ..services.auth import get_password_hash, verify_password, create_access_token
 from ..config import settings
 
 # ✅ APENAS UM ROUTER
@@ -21,6 +21,21 @@ class LoginPayload(BaseModel):
     password: str
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+
+# 🧠 Funções que estavam no services.auth
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(data: dict, expires_delta: int = 3600):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(seconds=expires_delta)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
 
 # 🧑‍💻 Login com usuário fixo (admin)
 @router.post("/login")
