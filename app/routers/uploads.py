@@ -7,7 +7,6 @@ from ..db import get_session
 from ..models.upload import Upload
 
 router = APIRouter(
-    prefix="/uploads",
     tags=["Uploads"]
 )
 
