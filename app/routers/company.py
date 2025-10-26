@@ -5,7 +5,9 @@ from ..db import get_session
 from ..models.company import Company
 from ..models.clients import Client
 
-router = APIRouter(prefix="/companies", tags=["Companies"])
+router = APIRouter(
+    tags=["Companies"]
+)
 
 # 📌 Criar empresa vinculada a um cliente
 @router.post("/", response_model=dict)
