@@ -216,7 +216,7 @@ from ..routers.uploads import get_zip_bytes_from_db
 from sqlalchemy.orm import Session
 from fastapi import Query, HTTPException, Depends
 
-@router.get("/relatorio-fiscal/docx")
+@router.get("/relatorio-fiscal")
 def get_relatorio_fiscal_docx(
     client_id: int = Query(...),
     upload_id: int = Query(...),
