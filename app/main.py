@@ -1,21 +1,19 @@
 from fastapi import FastAPI, APIRouter, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from fastapi.responses import FileResponse
 
 # 📦 Rotas
 from .routers import clients, company, uploads, dashboard, dictionary
+from .auth import router as auth_router
 
 # ⚙️ Configurações e DB
 from .config import settings
 from .db import Base, engine, get_session
 
 # 🧾 Relatório DOCX
-from fastapi.responses import FileResponse
 from app.services.analysis import run_analysis_from_bytes
 from app.services.report_docx import gerar_relatorio_fiscal
-
-# 🔐 Autenticação
-from .auth import router as auth_router
 
 # 🪵 Logging
 import logging
@@ -24,28 +22,34 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 )
-logger = logging.getLogger(__name__)  # ✅ Instância global do logger
+logger = logging.getLogger(__name__)
 
 # 🧠 Inicializa app
 app = FastAPI(
     title="AuditaSimples API",
-    version="1.0.0"
+    version="1.0.0",
+    description="API oficial do sistema AuditaSimples"
 )
 
 # 🌐 CORS
 origins = [
     "https://auditasimples.io",
     "https://www.auditasimples.io",
-    "http://localhost:5500"
+    "https://api.auditasimples.io",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500"
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https://.*\.auditasimples\.io",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logger.info(f"🌍 CORS habilitado para: {origins}")
 
 # 🧱 Banco de dados
 Base.metadata.create_all(bind=engine)
@@ -54,12 +58,12 @@ Base.metadata.create_all(bind=engine)
 api = APIRouter(prefix="/api")
 
 # 📊 Rotas principais
-api.include_router(clients.router)
-api.include_router(company.router)
-api.include_router(uploads.router)
-api.include_router(auth_router)
-api.include_router(dashboard.router)
-api.include_router(dictionary.router)
+api.include_router(auth_router, prefix="/auth", tags=["Auth"])
+api.include_router(clients.router, prefix="/clients", tags=["Clients"])
+api.include_router(company.router, prefix="/company", tags=["Company"])
+api.include_router(uploads.router, prefix="/uploads", tags=["Uploads"])
+api.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
+api.include_router(dictionary.router, prefix="/dictionary", tags=["Dictionary"])
 
 # 🩺 Health Check
 @app.get("/health")
