@@ -10,9 +10,9 @@ from ..routers.auth import get_current_user
 DICTIONARY_FILE = Path(__file__).resolve().parent.parent / "data" / "monofasicos.json"
 
 router = APIRouter(
-    prefix="/dictionary",
     tags=["Dictionary"]
 )
+
 
 class DictionaryUpdate(BaseModel):
     categoria: str
