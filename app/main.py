@@ -61,7 +61,7 @@ Base.metadata.create_all(bind=engine)
 api = APIRouter(prefix="/api")
 
 # 📊 Rotas principais
-api.include_router(auth_router)
+api.include_router(auth_router, prefix="/auth", tags=["Auth"])
 api.include_router(clients.router, prefix="/clients", tags=["Clients"])
 api.include_router(company.router, prefix="/company", tags=["Company"])
 api.include_router(uploads.router, prefix="/uploads", tags=["Uploads"])
