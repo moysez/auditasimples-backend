@@ -20,7 +20,9 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
 )
 
-router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+router = APIRouter(
+    tags=["Dashboard"]
+)
 
 # 📂 Caminho do dicionário
 MONOFASICOS_FILE = Path(__file__).resolve().parent.parent / "data" / "monofasicos.json"
