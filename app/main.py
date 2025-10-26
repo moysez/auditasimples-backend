@@ -85,23 +85,6 @@ def check_db(session: Session = Depends(get_session)):
         logger.exception("❌ Erro ao verificar conexão com o banco:")
         return {"status": "error", "detail": str(e)}
 
-# 🧾 Geração de Relatório DOCX (exemplo simples)
-@app.get("/api/relatorio/")
-def gerar_relatorio(client_id: int):
-    """
-    Gera e retorna o arquivo DOCX com o relatório fiscal monofásico.
-    ⚠️ Substituir zip_bytes pela lógica real de recuperação dos XMLs.
-    """
-    zip_bytes = b""  # 👉 Placeholder temporário
-    totals = run_analysis_from_bytes(zip_bytes)
-    path = gerar_relatorio_fiscal(totals, client_name=f"Cliente {client_id}")
-
-    return FileResponse(
-        path,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        filename="Relatorio_Fiscal_Auditoria_Monofasica.docx"
-    )
-
 # 📌 Registra o roteador principal
 app.include_router(api)
 
