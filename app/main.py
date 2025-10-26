@@ -5,7 +5,10 @@ from fastapi.responses import FileResponse
 
 # 📦 Rotas
 from .routers import clients, company, uploads, dashboard, dictionary
-from .auth import router as auth_router
+
+# 🔐 Autenticação
+from .routers import auth
+auth_router = auth.router
 
 # ⚙️ Configurações e DB
 from .config import settings
