@@ -2,6 +2,10 @@ from fastapi import FastAPI, APIRouter, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from fastapi.responses import FileResponse
+# 👇 aqui é onde você define o router sem prefixo duplicado
+router = APIRouter(
+    tags=["Uploads"]
+)
 
 # 📦 Rotas
 from .routers import clients, company, uploads, dashboard, dictionary
