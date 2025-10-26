@@ -3,7 +3,9 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models.report import Report
 
-router = APIRouter(prefix="/reports", tags=["Reports"])
+router = APIRouter(
+    tags=["Reports"]
+)
 
 @router.get("/{company_id}")
 def list_reports(company_id: int, db: Session = Depends(get_db)):
