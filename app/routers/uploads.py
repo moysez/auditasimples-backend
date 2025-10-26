@@ -62,7 +62,7 @@ def get_zip_bytes_from_db(upload_id: int, db: Session) -> bytes:
 # ===============================
 # 📋 LISTAR UPLOADS POR EMPRESA
 # ===============================
-@router.get("/list")
+@router.get("/list/")
 def list_uploads(
     client_id: int = Query(...),
     db: Session = Depends(get_session)
