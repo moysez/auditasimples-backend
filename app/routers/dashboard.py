@@ -209,3 +209,60 @@ def get_dashboard(
     except Exception as e:
         logger.exception(f"❌ Erro inesperado ao gerar dashboard (client_id={client_id}, upload_id={upload_id})")
         raise HTTPException(status_code=500, detail=f"Erro ao gerar relatório fiscal: {str(e)}")
+from fastapi.responses import FileResponse
+from ..services.report_docx import gerar_relatorio_fiscal
+from ..services.analysis import run_analysis_from_bytes
+from ..routers.uploads import get_zip_bytes_from_db
+from sqlalchemy.orm import Session
+from fastapi import Query, HTTPException, Depends
+
+@router.get("/relatorio-fiscal/docx")
+def get_relatorio_fiscal_docx(
+    client_id: int = Query(...),
+    upload_id: int = Query(...),
+    aliquota: float | None = Query(None),
+    imposto_pago: float | None = Query(None),
+    db: Session = Depends(get_session)
+):
+    """
+    📎 Gera e baixa o Relatório Fiscal Monofásico em DOCX.
+    """
+    try:
+        # ✅ Normaliza alíquota
+        aliq_in = None
+        if aliquota is not None:
+            aliq_in = float(aliquota)
+            if aliq_in > 1:
+                aliq_in = aliq_in / 100.0
+
+        imp_pago_in = float(imposto_pago) if imposto_pago is not None else None
+
+        # 📦 Busca o ZIP do banco
+        zip_bytes = get_zip_bytes_from_db(upload_id, db)
+        if not zip_bytes:
+            raise FileNotFoundError("Arquivo não encontrado no banco")
+
+        # 📊 Analisa dados
+        aliq_para_analise = aliq_in if imp_pago_in is None else None
+        imp_para_analise = imp_pago_in if imp_pago_in is not None else None
+        result = run_analysis_from_bytes(zip_bytes, aliq_para_analise, imp_para_analise)
+
+        # 📝 Gera DOCX
+        file_path = gerar_relatorio_fiscal(
+            totals=result,
+            client_name=f"Cliente {client_id}",
+            cnpj="00.000.000/0000-00"
+        )
+
+        # 📤 Retorna arquivo
+        return FileResponse(
+            path=file_path,
+            filename=file_path.split("/")[-1],
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+    except Exception as e:
+        logger.exception(f"❌ Erro ao gerar DOCX (client_id={client_id}, upload_id={upload_id})")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar DOCX: {str(e)}")
