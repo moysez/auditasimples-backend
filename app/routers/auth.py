@@ -12,7 +12,6 @@ from ..config import settings
 
 # ✅ APENAS UM ROUTER
 router = APIRouter(
-    prefix="/auth",
     tags=["Auth"]
 )
 
