@@ -6,7 +6,9 @@ from fastapi.responses import FileResponse
 router = APIRouter(
     tags=["Uploads"]
 )
-
+router = APIRouter(
+    tags=["Dictionary"]
+)
 # 📦 Rotas
 from .routers import clients, company, uploads, dashboard, dictionary
 
