@@ -6,7 +6,6 @@ from ..db import get_session
 from ..models.clients import Client
 
 router = APIRouter(
-    prefix="/clients",
     tags=["Clients"]
 )
 
