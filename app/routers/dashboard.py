@@ -62,7 +62,6 @@ def match_descricao_categoria(descricao: str, mapa: dict, limiar: int = 80):
 # Endpoint principal do Dashboard
 # -----------------------------
 @router.get("/")
-@router.get("/relatorio-fiscal")
 def get_dashboard(
     client_id: int = Query(...),
     upload_id: int = Query(...),
