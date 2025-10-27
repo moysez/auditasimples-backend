@@ -18,6 +18,21 @@ def _has_valid_ncm(ncm: str) -> bool:
     n = (ncm or '').strip()
     return len(n) == 8 and n.isdigit()
 
+def parse_float_safe(value) -> float:
+    """Normaliza string com vírgula ou ponto para float seguro."""
+    if isinstance(value, str):
+        value = value.replace('.', '').replace(',', '.')
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+def safe_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
 def init_totals() -> dict:
     return {
         # 📊 Documentos e valores
@@ -48,19 +63,13 @@ def init_totals() -> dict:
         'tax_summary': {}
     }
 
-def safe_float(value):
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
-
 # -------------------------------------------------
 # 🧠 Função principal
 # -------------------------------------------------
 def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pago: float = None) -> Dict[str, Any]:
     totals = init_totals()
-    produtos_raw = []   # lista completa de itens
-    dedup_map = {}      # deduplicados apenas monofásicos
+    produtos_raw = []   # lista completa de itens monofásicos
+    dedup_map = {}      # deduplicados — apenas monofásicos
     excluidos = []      # produtos monofásicos tributados incorretamente
 
     # ======================================================
@@ -165,7 +174,6 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
                             "chave": doc.get('chave')
                         })
 
-    
     # ======================================================
     # 🕒 Converter datas
     # ======================================================
@@ -177,6 +185,10 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
     # ======================================================
     # 💰 Cálculo tributário
     # ======================================================
+    # 🆕 Normaliza imposto_pago para evitar multiplicação indevida
+    if imposto_pago is not None:
+        imposto_pago = parse_float_safe(imposto_pago)
+
     faturamento = totals['total_value_sum']
     receita_excluida = totals['revenue_excluded']
     base_corrigida = faturamento - receita_excluida
