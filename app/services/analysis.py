@@ -119,7 +119,71 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
                 # 🚨 Conta ST incorreto
                 if is_mono and not (cfop == "5405" and csosn == "500"):
                     totals['st_incorreta'] += 1
+    # ======================================================
+    # 🧾 Captura e deduplicação de produtos para o relatório
+    # ======================================================
+    produtos_raw = []  # lista completa de itens
+    dedup_map = {}     # deduplicados por descrição
+    excluidos = []     # produtos monofásicos incorretos
 
+    with zipfile.ZipFile(io.BytesIO(zip_bytes), 'r') as zf:
+        for name in zf.namelist():
+            if not name.lower().endswith('.xml'):
+                continue
+
+            xml_bytes = zf.read(name)
+            doc = parse_nfe_xml(xml_bytes)
+            totals['documents'] += 1
+            totals['total_value_sum'] += doc.get('total_value', 0.0)
+
+            dt = doc.get('issue_date')
+            if dt:
+                if totals['period_start'] is None or dt < totals['period_start']:
+                    totals['period_start'] = dt
+                if totals['period_end'] is None or dt > totals['period_end']:
+                    totals['period_end'] = dt
+
+            for item in doc.get('items', []):
+                totals['items'] += 1
+                desc = (item.get('xProd') or '').strip()
+                ncm = (item.get('ncm') or '').strip()
+                cfop = (item.get('cfop') or '').strip()
+                csosn = (item.get('csosn') or '').strip()
+                vprod = float(item.get('vProd') or 0)
+
+                hit = matcher.classify(desc)
+                is_mono = hit and matcher.is_monofasico(hit[0])
+
+                # 👇 salva produto bruto
+                produtos_raw.append({
+                    "descricao": desc,
+                    "ncm": ncm,
+                    "cfop": cfop,
+                    "csosn": csosn,
+                    "valor_total": vprod,
+                    "monofasico": bool(is_mono),
+                    "monofasico_correto": (is_mono and cfop == "5405" and csosn == "500"),
+                })
+
+                # Deduplicação
+                key = desc.lower()
+                if key not in dedup_map:
+                    dedup_map[key] = {"descricao": desc, "ocorrencias": 1, "valor_total": vprod}
+                else:
+                    dedup_map[key]["ocorrencias"] += 1
+                    dedup_map[key]["valor_total"] += vprod
+
+                # Se for monofásico incorreto → lista de excluídos
+                if is_mono and not (cfop == "5405" and csosn == "500"):
+                    excluidos.append({
+                        "descricao": desc,
+                        "valor_total": vprod,
+                        "ncm": ncm,
+                        "cfop": cfop,
+                        "csosn": csosn,
+                    })
+
+    
     # ======================================================
     # 🕒 Converter datas
     # ======================================================
@@ -185,5 +249,10 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
 
     # Log opcional
     logger.info(f"[DEBUG ANALYSIS] tax_summary final: {tax_summary}")
+
+
+    totals['products'] = produtos_raw
+    totals['produtos_duplicados'] = sorted(dedup_map.values(), key=lambda x: x["valor_total"], reverse=True)
+    totals['produtos_excluidos'] = excluidos
 
     return totals
