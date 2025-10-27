@@ -194,19 +194,12 @@ def gerar_relatorio_fiscal(
     # ==========================
     # 5. Detalhamento Analítico dos Itens Excluídos (por mês)
     # ==========================
-    # Considera item “excluído” se vier marcado como monofásico e não-ST correto,
-    # ou simplesmente todos os ‘products’ quando não houver flag explícita.
+    # Considera item “excluído” se for monofásico e tiver tributação incorreta
     produtos_excluidos = []
     for it in produtos:
-        # Flags possíveis vindas do analisador:
-        # - it["monofasico"] == True
-        # - it["st_correto"] == False
-        # Se não houver flags, considere todos (mantém compatibilidade)
         mono = it.get("monofasico")
         st_correto = it.get("st_correto")
-        if mono is True and (st_correto is False or st_correto is None):
-            produtos_excluidos.append(it)
-        elif mono is None and st_correto is None:
+        if mono and not st_correto:
             produtos_excluidos.append(it)
 
     if produtos_excluidos:
