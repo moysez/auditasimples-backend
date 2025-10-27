@@ -122,49 +122,50 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
                     val = matcher.validate_ncm_for_category(ncm, hit[0])
                     if not val["ncm_valido"]:
                         totals['erros_ncm_categoria'] += 1
-
-                # 🧾 Salva produto bruto (com campos completos)
-                produtos_raw.append({
-                    "descricao": desc,
-                    "ncm": ncm,
-                    "cfop": cfop,
-                    "csosn": csosn,
-                    "valor_total": vprod,
-                    "valor_unitario": item.get('vUnCom'),
-                    "quantidade": item.get('qCom'),
-                    "codigo": item.get('cProd'),
-                    "numero": doc.get('numero'),
-                    "data_emissao": dt.isoformat() if dt else None,
-                    "chave": doc.get('chave'),
-                    "monofasico": bool(is_mono),
-                    "st_correto": (is_mono and cfop == "5405" and csosn == "500")
-                })
-
-                # 📊 Deduplicação — apenas monofásicos
+                
+                # 🧾 Salva produto bruto (somente monofásico para o relatório)
                 if is_mono:
+                    produtos_raw.append({
+                        "descricao": desc,
+                        "ncm": ncm,
+                        "cfop": cfop,
+                        "csosn": csosn,
+                        "valor_total": vprod,
+                        "valor_unitario": item.get('vUnCom'),
+                        "quantidade": item.get('qCom'),
+                        "codigo": item.get('cProd'),
+                        "numero": doc.get('numero'),
+                        "data_emissao": dt.isoformat() if dt else None,
+                        "chave": doc.get('chave'),
+                        "monofasico": True,
+                        "st_correto": (cfop == "5405" and csosn == "500")
+                    })
+                
+                    # 📊 Deduplicação — apenas monofásicos
                     key = desc.lower()
                     if key not in dedup_map:
                         dedup_map[key] = {"descricao": desc, "ocorrencias": 1, "valor_total": vprod}
                     else:
                         dedup_map[key]["ocorrencias"] += 1
                         dedup_map[key]["valor_total"] += vprod
+                
+                    # 🪙 Lista de excluídos (monofásicos tributados incorretamente)
+                    if not (cfop == "5405" and csosn == "500"):
+                        excluidos.append({
+                            "descricao": desc,
+                            "valor_total": vprod,
+                            "ncm": ncm,
+                            "cfop": cfop,
+                            "csosn": csosn,
+                            "codigo": item.get('cProd'),
+                            "quantidade": item.get('qCom'),
+                            "valor_unitario": item.get('vUnCom'),
+                            "numero": doc.get('numero'),
+                            "data_emissao": dt.isoformat() if dt else None,
+                            "chave": doc.get('chave')
+                        })
 
-                # 🪙 Lista de excluídos (monofásicos tributados incorretamente)
-                if is_mono and not (cfop == "5405" and csosn == "500"):
-                    excluidos.append({
-                        "descricao": desc,
-                        "valor_total": vprod,
-                        "ncm": ncm,
-                        "cfop": cfop,
-                        "csosn": csosn,
-                        "codigo": item.get('cProd'),
-                        "quantidade": item.get('qCom'),
-                        "valor_unitario": item.get('vUnCom'),
-                        "numero": doc.get('numero'),
-                        "data_emissao": dt.isoformat() if dt else None,
-                        "chave": doc.get('chave')
-                    })
-
+    
     # ======================================================
     # 🕒 Converter datas
     # ======================================================
