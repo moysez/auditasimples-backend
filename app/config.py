@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     # Autenticação inicial (admin default)
     ADMIN_USER: str = "admin"
-    ADMIN_PASS: str = "ProfitFood@123"
+    ADMIN_PASS: str = "102030*"
 
     # Segurança
     SECRET_KEY: str = "change-me"
