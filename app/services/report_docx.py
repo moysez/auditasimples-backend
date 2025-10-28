@@ -1,248 +1,297 @@
-from __future__ import annotations
+import os
 from datetime import datetime
-from typing import Dict, Any
-import io
-import zipfile
-import logging
+from typing import Any, Dict
+from collections import defaultdict
 
-from .nfe import parse_nfe_xml
-from .ai_matcher import matcher
-
-logger = logging.getLogger(__name__)
-
-# ======================================================
-# 🔧 Normalizadores robustos (BRL / percentuais)
-# ======================================================
-
-def parse_money_brl(value) -> float:
-    """
-    Converte strings em formato BR (com vírgula) ou número cru.
-    Aceita '3.365,99', '3365,99', '3365.99', 3365.99, 336599 (centavos).
-    """
-    if value is None:
-        return 0.0
-    if isinstance(value, (int, float)):
-        v = float(value)
-    else:
-        s = str(value).strip()
-        s = s.replace("R$", "").replace(" ", "")
-        if "," in s and s.count(",") == 1:
-            s = s.replace(".", "").replace(",", ".")
-        try:
-            v = float(s)
-        except Exception:
-            return 0.0
-    return float(v)
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 
 
-def parse_percent(value) -> float:
-    """
-    Converte '10,2' → 0.102  / '0.1' → 0.1
-    """
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        v = float(value)
-    else:
-        s = str(value).strip().replace("%", "").replace("R$", "").replace(" ", "")
-        if "," in s and s.count(",") == 1:
-            s = s.replace(".", "").replace(",", ".")
-        try:
-            v = float(s)
-        except Exception:
-            return None
-    return v / 100.0 if v >= 1.0 else v
-
-
-# ======================================================
-# Funções auxiliares
-# ======================================================
-
-def _has_valid_ncm(ncm: str) -> bool:
-    n = (ncm or '').strip()
-    return len(n) == 8 and n.isdigit()
-
-def safe_float(value):
+# ==========================
+# Utilitários de formatação
+# ==========================
+def _fmt_money(v: Any) -> str:
     try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
+        n = float(v or 0.0)
+    except Exception:
+        n = 0.0
+    return f"{n:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-def init_totals() -> dict:
-    return {
-        'documents': 0,
-        'total_value_sum': 0.0,
-        'period_start': None,
-        'period_end': None,
-        'items': 0,
-        'revenue_excluded': 0.0,
-        'revenue_excluded_breakdown': {},
-        'st_correct_items_value': 0.0,
-        'monofasico_palavra_chave': 0,
-        'monofasico_sem_ncm': 0,
-        'st_cfop_csosn_corretos': 0,
-        'st_incorreta': 0,
-        'erros_ncm_categoria': 0,
-        'erros_outros': 0,
-        'monofasico_total': 0,
-        'monofasico_sem_cfop_csosn': 0,
-        'tax_summary': {}
-    }
 
-# ======================================================
-# 🧠 Função principal
-# ======================================================
-
-def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pago: float = None) -> Dict[str, Any]:
-    totals = init_totals()
-
-    # Normaliza entradas
-    aliquota_frac = parse_percent(aliquota) if aliquota is not None else None
-    imposto_pago_input = parse_money_brl(imposto_pago) if imposto_pago is not None else None
-
-    produtos_raw = []
-    dedup_map = {}
-    excluidos = []
-
-    with zipfile.ZipFile(io.BytesIO(zip_bytes), 'r') as zf:
-        for name in zf.namelist():
-            if not name.lower().endswith('.xml'):
-                continue
-
-            xml_bytes = zf.read(name)
-            doc = parse_nfe_xml(xml_bytes)
-            totals['documents'] += 1
-            totals['total_value_sum'] += doc.get('total_value', 0.0)
-
-            dt = doc.get('issue_date')
-            if dt:
-                if totals['period_start'] is None or dt < totals['period_start']:
-                    totals['period_start'] = dt
-                if totals['period_end'] is None or dt > totals['period_end']:
-                    totals['period_end'] = dt
-
-            for item in doc.get('items', []):
-                totals['items'] += 1
-                desc = (item.get('xProd') or '').strip()
-                ncm = (item.get('ncm') or '').strip()
-                cfop = (item.get('cfop') or '').strip()
-                csosn = (item.get('csosn') or '').strip()
-                cprod = (item.get('cProd') or '').strip()
-                vprod = float(item.get('vProd') or 0)
-
-                is_mono = False
-                hit = matcher.classify(desc)
-                if hit and matcher.is_monofasico(hit[0]):
-                    is_mono = True
-                    totals['monofasico_palavra_chave'] += 1
-                    totals['monofasico_total'] += 1
-                    if not _has_valid_ncm(ncm):
-                        totals['monofasico_sem_ncm'] += 1
-                    if not (cfop and csosn):
-                        totals['monofasico_sem_cfop_csosn'] += 1
-
-                if is_mono and cfop == "5405" and csosn == "500":
-                    totals['st_cfop_csosn_corretos'] += 1
-                    totals['st_correct_items_value'] += vprod
-                elif is_mono:
-                    key = hit[0] if hit else "unknown"
-                    totals['revenue_excluded_breakdown'].setdefault(key, 0.0)
-                    totals['revenue_excluded_breakdown'][key] += vprod
-                    totals['revenue_excluded'] += vprod
-                    totals['st_incorreta'] += 1
-
-                if hit:
-                    val = matcher.validate_ncm_for_category(ncm, hit[0])
-                    if not val["ncm_valido"]:
-                        totals['erros_ncm_categoria'] += 1
-
-                if is_mono:
-                    prod_row = {
-                        "descricao": desc,
-                        "codigo": cprod,
-                        "ncm": ncm,
-                        "cfop": cfop,
-                        "csosn": csosn,
-                        "valor_total": vprod,
-                        "valor_unitario": item.get('vUnCom'),
-                        "quantidade": item.get('qCom'),
-                        "numero": doc.get('numero'),
-                        "data_emissao": dt.isoformat() if dt else None,
-                        "chave": doc.get('chave'),
-                        "monofasico": True,
-                        "st_correto": (cfop == "5405" and csosn == "500"),
-                    }
-                    produtos_raw.append(prod_row)
-
-                    key = ((item.get('cProd') or '').strip().lower(), desc.lower())
-                    if key not in dedup_map:
-                        dedup_map[key] = {
-                            "codigo": (item.get('cProd') or '').strip(),
-                            "descricao": desc,
-                            "ocorrencias": 1,
-                            "valor_total": vprod,
-                        }
-                    else:
-                        dedup_map[key]["ocorrencias"] += 1
-                        dedup_map[key]["valor_total"] += vprod
-
-                    if not prod_row["st_correto"]:
-                        excluidos.append(prod_row)
-
-    if totals['period_start']:
-        totals['period_start'] = totals['period_start'].isoformat()
-    if totals['period_end']:
-        totals['period_end'] = totals['period_end'].isoformat()
-
-    # ======================================================
-    # 💰 Cálculo tributário
-    # ======================================================
-    faturamento = totals['total_value_sum']
-    receita_excluida = totals['revenue_excluded']
-    base_corrigida = faturamento - receita_excluida
-
-    imposto_corrigido = economia_estimada = imposto_pago_final = 0.0
-
+def _fmt_percent(frac: Any) -> str:
     try:
-        if aliquota_frac is not None:
-            imposto_base_atual = faturamento * aliquota_frac
-            imposto_corrigido = base_corrigida * aliquota_frac
-            economia_estimada = max(0.0, imposto_base_atual - imposto_corrigido)
-            imposto_pago_final = imposto_base_atual
-        elif imposto_pago_input is not None:
-            imposto_bruto = imposto_pago_input
-            if faturamento > 0 and imposto_bruto > (faturamento * 3):
-                imposto_bruto = imposto_bruto / 100.0
+        n = float(frac or 0.0)
+    except Exception:
+        n = 0.0
+    n = n * 100.0
+    return f"{n:,.2f}%".replace(",", "X").replace(".", ",").replace("X", ".")
 
-            aliquota_media = (imposto_bruto / faturamento) if faturamento > 0 else 0.0
-            imposto_corrigido = base_corrigida * aliquota_media
-            economia_estimada = max(0.0, imposto_bruto - imposto_corrigido)
-            imposto_pago_final = imposto_bruto
-    except Exception as e:
-        logger.warning(f"[ANÁLISE] Falha no cálculo tributário: {e}")
-        economia_estimada = 0.0
-        imposto_corrigido = 0.0
 
-    tax_summary = {
-        'faturamento': faturamento,
-        'base_corrigida': base_corrigida,
-        'receita_excluida': receita_excluida,
-        'imposto_corrigido': imposto_corrigido,
-        'economia_estimada': economia_estimada,
-        'aliquota_utilizada': (
-            aliquota_frac if aliquota_frac is not None
-            else ((imposto_pago_final / faturamento) if faturamento > 0 else 0.0)
-        ),
-        'imposto_pago': imposto_pago_final,
-        'imposto_pago_informado': imposto_pago_input
-    }
+def _format_table_borders(table) -> None:
+    """
+    Adiciona bordas simples em todas as células da tabela (compatível com python-docx).
+    """
+    tbl = table._tbl
+    tblBorders = OxmlElement("w:tblBorders")
 
-    for k, v in tax_summary.items():
-        tax_summary[k] = safe_float(v)
+    for side in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        el = OxmlElement(f"w:{side}")
+        el.set(qn("w:val"), "single")
+        el.set(qn("w:sz"), "4")
+        el.set(qn("w:space"), "0")
+        el.set(qn("w:color"), "000000")
+        tblBorders.append(el)
 
-    totals['tax_summary'] = tax_summary
-    totals['products'] = produtos_raw
-    totals['produtos_duplicados'] = sorted(dedup_map.values(), key=lambda x: x["valor_total"], reverse=True)
-    totals['produtos_excluidos'] = excluidos
+    tblPr = tbl.tblPr
+    tblPr.append(tblBorders)
 
-    return totals
+
+def _add_row(tbl, label: Any, value: Any) -> None:
+    r = tbl.add_row().cells
+    r[0].text = "" if label is None else str(label)
+    r[1].text = "" if value is None else str(value)
+
+
+# ==========================
+# Geração do Relatório DOCX
+# ==========================
+def gerar_relatorio_fiscal(
+    totals: Dict[str, Any],
+    client_name: str = "Cliente",
+    cnpj: str = "00.000.000/0000-00",
+) -> str:
+    totals = totals or {}
+    tax = totals.get("tax_summary") or {}
+
+    # Período
+    period_start = totals.get("period_start") or "---"
+    period_end = totals.get("period_end") or "---"
+
+    # Cartões/contadores gerais
+    documentos = totals.get("documents", 0) or 0
+    itens = totals.get("items", 0) or 0
+    valor_total = totals.get("total_value_sum", 0.0) or 0.0
+
+    # Tributário (garante defaults e coerência)
+    faturamento = (tax.get("faturamento", None) if tax.get("faturamento", None) is not None else valor_total) or 0.0
+    receita_excluida = tax.get("receita_excluida", 0.0) or 0.0
+    base_corrigida = (tax.get("base_corrigida", None) if tax.get("base_corrigida", None) is not None else (faturamento - receita_excluida)) or 0.0
+    imposto_pago = tax.get("imposto_pago", 0.0) or 0.0
+    imposto_corrigido = tax.get("imposto_corrigido", 0.0) or 0.0
+    economia = tax.get("economia_estimada", 0.0) or 0.0
+    aliquota_frac = tax.get("aliquota_utilizada", 0.0) or 0.0
+
+    # Erros fiscais & agrupamentos
+    erros = totals.get("erros_fiscais") or {}
+    st_corretos = erros.get("st_corretos", totals.get("st_cfop_csosn_corretos", 0) or 0)
+    st_incorretos = erros.get("st_incorretos", totals.get("st_incorreta", 0) or 0)
+    mono_sem_ncm = erros.get("monofasico_ncm_incorreto", totals.get("monofasico_sem_ncm", 0) or 0)
+    mono_desc = erros.get("monofasico_desc", totals.get("monofasico_palavra_chave", 0) or 0)
+
+    produtos_duplicados = erros.get("produtos_duplicados") or totals.get("produtos_duplicados") or []
+    produtos = totals.get("products") or []
+
+    # Documento
+    doc = Document()
+    data_hoje = datetime.now().strftime("%d/%m/%Y")
+
+    # ==========================
+    # CAPA
+    # ==========================
+    h = doc.add_heading("Relatório de Auditoria Fiscal — (Simples Nacional)", 0)
+    h.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p = doc.add_paragraph(f"{client_name}  |  CNPJ: {cnpj}")
+    p.runs[0].bold = True
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p2 = doc.add_paragraph(f"Período auditado: {period_start} — {period_end}")
+    p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p3 = doc.add_paragraph(f"Data da análise: {data_hoje}")
+    p3.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_paragraph("")
+
+    # ==========================
+    # 1. Resumo Geral
+    # ==========================
+    doc.add_heading("1. Resumo Geral", level=1)
+    t_resumo = doc.add_table(rows=1, cols=2)
+    t_resumo.style = "Table Grid"
+    t_resumo.cell(0, 0).text = "Indicador"
+    t_resumo.cell(0, 1).text = "Valor"
+    t_resumo.rows[0].cells[0].paragraphs[0].runs[0].bold = True
+    t_resumo.rows[0].cells[1].paragraphs[0].runs[0].bold = True
+    _add_row(t_resumo, "Documentos analisados", documentos)
+    _add_row(t_resumo, "Itens analisados", itens)
+    _add_row(t_resumo, "Faturamento bruto (soma NF-e)", f"R$ {_fmt_money(faturamento)}")
+    _format_table_borders(t_resumo)
+    doc.add_paragraph("")
+
+    # ==========================
+    # 2. Resumo Tributário
+    # ==========================
+    doc.add_heading("2. Resumo Tributário", level=1)
+    t_trib = doc.add_table(rows=1, cols=2)
+    t_trib.style = "Table Grid"
+    t_trib.cell(0, 0).text = "Descrição"
+    t_trib.cell(0, 1).text = "Valor"
+    t_trib.rows[0].cells[0].paragraphs[0].runs[0].bold = True
+    t_trib.rows[0].cells[1].paragraphs[0].runs[0].bold = True
+
+    _add_row(t_trib, "Faturamento Bruto", f"R$ {_fmt_money(faturamento)}")
+    _add_row(t_trib, "Receita Monofásica Excluída", f"R$ {_fmt_money(receita_excluida)}")
+    _add_row(t_trib, "Base Corrigida", f"R$ {_fmt_money(base_corrigida)}")
+    _add_row(t_trib, "Alíquota utilizada", _fmt_percent(aliquota_frac))
+    _add_row(t_trib, "Imposto Pago", f"R$ {_fmt_money(imposto_pago)}")
+    _add_row(t_trib, "Imposto Corrigido", f"R$ {_fmt_money(imposto_corrigido)}")
+    _add_row(t_trib, "Economia Estimada", f"R$ {_fmt_money(economia)}")
+    _format_table_borders(t_trib)
+    doc.add_paragraph("")
+
+    # ==========================
+    # 3. Erros Fiscais
+    # ==========================
+    doc.add_heading("3. Erros Fiscais", level=1)
+    t_err = doc.add_table(rows=1, cols=2)
+    t_err.style = "Table Grid"
+    t_err.cell(0, 0).text = "Indicador"
+    t_err.cell(0, 1).text = "Quantidade"
+    t_err.rows[0].cells[0].paragraphs[0].runs[0].bold = True
+    t_err.rows[0].cells[1].paragraphs[0].runs[0].bold = True
+    _add_row(t_err, "Monofásicos (IA)", mono_desc)
+    _add_row(t_err, "Monofásicos sem NCM", mono_sem_ncm)
+    _add_row(t_err, "ST corretos", st_corretos)
+    _add_row(t_err, "ST incorretos", st_incorretos)
+    _format_table_borders(t_err)
+    doc.add_paragraph("")
+
+    # ==========================
+    # 4. Itens Deduplicados (por descrição)
+    # ==========================
+    if produtos_duplicados:
+        doc.add_heading("4. Itens Deduplicados (por descrição)", level=1)
+        t_dup = doc.add_table(rows=1, cols=4)
+        t_dup.style = "Table Grid"
+        hdr = t_dup.rows[0].cells
+        hdr[0].text = "Código"
+        hdr[1].text = "Descrição"
+        hdr[2].text = "Ocorrências"
+        hdr[3].text = "Valor Total"
+        for c in hdr:
+            c.paragraphs[0].runs[0].bold = True
+
+        for item in produtos_duplicados:
+            r = t_dup.add_row().cells
+            r[0].text = str(item.get("codigo") or "")
+            r[1].text = str(item.get("descricao") or "")
+            r[2].text = str(item.get("ocorrencias") or 0)
+            r[3].text = f"R$ {_fmt_money(item.get('valor_total') or 0)}"
+
+        _format_table_borders(t_dup)
+        doc.add_paragraph("")
+
+    # ==========================
+    # 5. Detalhamento Analítico dos Itens Excluídos
+    # ==========================
+    produtos_excluidos = []
+    for it in produtos:
+        if it.get("monofasico") and not it.get("st_correto"):
+            produtos_excluidos.append(it)
+
+    if produtos_excluidos:
+        doc.add_heading("5. Detalhamento Analítico dos Itens Excluídos", level=1)
+
+        grupos = defaultdict(list)
+        for item in produtos_excluidos:
+            data = item.get("data_emissao")
+            mes_ref = "Sem Data"
+            if data:
+                try:
+                    mes_ref = datetime.fromisoformat(str(data)).strftime("%Y-%m")
+                except Exception:
+                    mes_ref = str(data)
+            grupos[mes_ref].append(item)
+
+        total_geral = 0.0
+        for mes, lista in sorted(grupos.items()):
+            doc.add_heading(f"Mês de referência: {mes}", level=2)
+
+            tabela = doc.add_table(rows=1, cols=10)
+            tabela.style = "Table Grid"
+            headers = [
+                "Data", "Documento", "Código", "Descrição", "NCM",
+                "NCM/CEST Recomendado", "Qtd", "Vlr Unit", "Vlr Total", "Chave"
+            ]
+            for idx, htxt in enumerate(headers):
+                tabela.cell(0, idx).text = htxt
+                tabela.cell(0, idx).paragraphs[0].runs[0].bold = True
+
+            subtotal_mes = 0.0
+            for it in lista:
+                r = tabela.add_row().cells
+                r[0].text = str(it.get("data_emissao") or "-")
+                r[1].text = str(it.get("numero") or "-")
+                r[2].text = str(it.get("codigo") or "-")
+                r[3].text = str(it.get("descricao") or "-")
+                r[4].text = str(it.get("ncm") or "-")
+                recomend = f"{it.get('ncm_recomendado') or '-'} / {it.get('cest') or it.get('cest_recomendado') or '-'}"
+                r[5].text = recomend
+                r[6].text = str(it.get("quantidade") or "-")
+                r[7].text = f"R$ {_fmt_money(it.get('valor_unitario') or 0)}"
+                vtotal = float(it.get("valor_total") or 0.0)
+                r[8].text = f"R$ {_fmt_money(vtotal)}"
+                r[9].text = str(it.get("chave") or "-")
+                subtotal_mes += vtotal
+
+            _format_table_borders(tabela)
+            doc.add_paragraph(f"Subtotal mês {mes}: R$ {_fmt_money(subtotal_mes)}")
+            total_geral += subtotal_mes
+
+        doc.add_paragraph(f"TOTAL GERAL DOS ITENS EXCLUÍDOS: R$ {_fmt_money(total_geral)}")
+        doc.add_paragraph("")
+
+    # ==========================
+    # 6. Fundamentação Legal
+    # ==========================
+    doc.add_heading("6. Fundamentação Legal", level=1)
+    doc.add_paragraph("• Lei nº 10.147/2000 — regime monofásico de PIS/COFINS.")
+    doc.add_paragraph("• Lei Complementar nº 123/2006 — art. 18 § 4º-A.")
+    doc.add_paragraph("• Resolução CGSN nº 140/2018 — art. 25, § 4º.")
+    doc.add_paragraph("Conclusão: a receita monofásica deve ser excluída da base de cálculo do DAS.")
+
+    # ==========================
+    # 7. Estimativa de Restituição
+    # ==========================
+    doc.add_heading("7. Estimativa de Restituição", level=1)
+    economia_anual = float(economia) * 12.0
+    p_est1 = doc.add_paragraph(f"💰 R$ {_fmt_money(economia)} por mês (estimado)")
+    p_est1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_est2 = doc.add_paragraph(f"📅 Em um ano: R$ {_fmt_money(economia_anual)}")
+    p_est2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # ==========================
+    # 8. Próximos Passos
+    # ==========================
+    doc.add_heading("8. Próximos Passos", level=1)
+    passos = [
+        "1. Conferir dados no PGDAS-D.",
+        "2. Retificar períodos passados (se aplicável).",
+        "3. Preparar pedido de restituição/compensação.",
+        "4. Acompanhar até o reembolso.",
+    ]
+    for s in passos:
+        doc.add_paragraph(s)
+
+    # ==========================
+    # 9. Assinatura Digital
+    # ==========================
+    doc.add_heading("9. Assinatura Digital", level=1)
+    doc.add_paragraph("[NOME DO RESPONSÁVEL]")
+    doc.add_paragraph("CRC / OAB / CNPJ")
+    doc.add_paragraph(f"Data: {data_hoje}")
+
+    # Salvar
+    filename = f"Relatorio_Fiscal_Auditoria_Monofasica_{client_name.replace(' ', '_')}.docx"
+    path = os.path.join("/tmp", filename)
+    doc.save(path)
+    return path
