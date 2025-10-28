@@ -222,6 +222,7 @@ def gerar_relatorio_fiscal(
                 "Data", "Documento", "Código", "Descrição", "NCM",
                 "NCM/CEST Recomendado", "Qtd", "Vlr Unit", "Vlr Total", "Chave"
             ]
+
             for idx, htxt in enumerate(headers):
                 tabela.cell(0, idx).text = htxt
                 tabela.cell(0, idx).paragraphs[0].runs[0].bold = True
