@@ -22,13 +22,6 @@
         "vodka", "whisky", "whiskey", "rum", "gin", "cachaça",
         "absolut", "smirnoff", "johnnie walker", "jack daniels", "bacardi"
     ],
-    "sucos": [
-        "suco natural", "suco de laranja", "suco de uva", "suco integral",
-        "do bem", "suco concentrado", "suco industrializado"
-    ],
-    "cafés e chás": [
-        "café", "expresso", "cappuccino", "chá", "mate", "chá gelado"
-    ],
     "outros monofásicos": [
         "isotônico", "gatorade", "powerade", "vitamin water",
         "água de coco", "suplemento líquido"
