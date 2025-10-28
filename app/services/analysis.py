@@ -160,18 +160,16 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
                         "ncm": ncm,
                         "cfop": cfop,
                         "csosn": csosn,
-                        "valor_total": vprod,
-                        "valor_unitario": item.get('vUnCom'),
                         "quantidade": item.get('qCom'),
-                        "numero": doc.get('numero'),
+                        "valor_unitario": item.get('vUnCom'),
+                        "valor_total": vprod,
+                        "numero": doc.get('cNF') or doc.get('numero'),
                         "data_emissao": dt.isoformat() if dt else None,
-                        "chave": doc.get('chave'),
+                        "chave": doc.get('chNFe') or doc.get('chave'),
                         "monofasico": True,
                         "st_correto": (cfop == "5405" and csosn == "500"),
-                        "ncm_recomendado": None,
-                        "cest": item.get('cest') or None,
-                        "cest_recomendado": None,
                     }
+
                     produtos_raw.append(prod_row)
 
                     # 📊 Deduplicação por código + descrição
