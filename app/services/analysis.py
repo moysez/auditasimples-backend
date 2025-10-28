@@ -18,7 +18,6 @@ def _has_valid_ncm(ncm: str) -> bool:
     return len(n) == 8 and n.isdigit()
 
 def parse_float_safe(value) -> float:
-    """Normaliza string com vírgula/ponto para float seguro."""
     if isinstance(value, str):
         value = value.replace('.', '').replace(',', '.')
     try:
@@ -67,13 +66,10 @@ def init_totals() -> dict:
 # -------------------------------------------------
 def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pago: float = None) -> Dict[str, Any]:
     totals = init_totals()
-    produtos_raw = []   # lista de itens monofásicos
-    dedup_map = {}      # deduplicação — apenas monofásicos
+    produtos_raw = []   # apenas monofásicos (para relatório)
+    dedup_map = {}      # deduplicados — apenas monofásicos
     excluidos = []      # monofásicos tributados incorretamente
 
-    # ======================================================
-    # 📦 Leitura única dos XMLs
-    # ======================================================
     with zipfile.ZipFile(io.BytesIO(zip_bytes), 'r') as zf:
         for name in zf.namelist():
             if not name.lower().endswith('.xml'):
@@ -93,10 +89,11 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
 
             for item in doc.get('items', []):
                 totals['items'] += 1
-                desc = (item.get('xProd') or '').strip()
-                ncm = (item.get('ncm') or '').strip()
-                cfop = (item.get('cfop') or '').strip()
+                desc  = (item.get('xProd') or '').strip()
+                ncm   = (item.get('ncm') or '').strip()
+                cfop  = (item.get('cfop') or '').strip()
                 csosn = (item.get('csosn') or '').strip()
+                cprod = (item.get('cProd') or '').strip()
                 vprod = float(item.get('vProd') or 0)
 
                 # 👀 IA: Detectar monofásico
@@ -123,39 +120,40 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
                     totals['revenue_excluded'] += vprod
                     totals['st_incorreta'] += 1
 
-                # 🚨 Validação NCM vs categoria
+                # 🚨 NCM vs categoria
                 if hit:
                     val = matcher.validate_ncm_for_category(ncm, hit[0])
                     if not val["ncm_valido"]:
                         totals['erros_ncm_categoria'] += 1
 
-                # 🧾 Somente monofásicos seguem para o relatório
+                # 🧾 Guarda produto — apenas monofásico
                 if is_mono:
-                    codigo = item.get('cProd')
-                    v_un = item.get('vUnCom')
-                    q_com = item.get('qCom')
-
-                    produtos_raw.append({
+                    prod_row = {
                         "descricao": desc,
+                        "codigo": cprod,
                         "ncm": ncm,
                         "cfop": cfop,
                         "csosn": csosn,
                         "valor_total": vprod,
-                        "valor_unitario": v_un,
-                        "quantidade": q_com,
-                        "codigo": codigo,
+                        "valor_unitario": item.get('vUnCom'),
+                        "quantidade": item.get('qCom'),
                         "numero": doc.get('numero'),
                         "data_emissao": dt.isoformat() if dt else None,
                         "chave": doc.get('chave'),
                         "monofasico": True,
-                        "st_correto": (cfop == "5405" and csosn == "500")
-                    })
+                        "st_correto": (cfop == "5405" and csosn == "500"),
+                        # campos “recomendado” podem ser preenchidos futuramente pelo seu dicionário
+                        "ncm_recomendado": None,
+                        "cest": item.get('cest') or None,
+                        "cest_recomendado": None,
+                    }
+                    produtos_raw.append(prod_row)
 
-                    # 📊 Deduplicação (somente monofásicos) — mantém 1 código representativo
-                    key = (codigo or '').strip() + '|' + desc.lower()
+                    # Deduplicação (chave = descrição)
+                    key = desc.lower()
                     if key not in dedup_map:
                         dedup_map[key] = {
-                            "codigo": codigo or "",
+                            "codigo": cprod,
                             "descricao": desc,
                             "ocorrencias": 1,
                             "valor_total": vprod,
@@ -164,102 +162,65 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
                         dedup_map[key]["ocorrencias"] += 1
                         dedup_map[key]["valor_total"] += vprod
 
-                    # 🪙 Lista de excluídos (monofásicos tributados incorretamente)
-                    if not (cfop == "5405" and csosn == "500"):
-                        excluidos.append({
-                            "descricao": desc,
-                            "valor_total": vprod,
-                            "ncm": ncm,
-                            "cfop": cfop,
-                            "csosn": csosn,
-                            "codigo": codigo,
-                            "quantidade": q_com,
-                            "valor_unitario": v_un,
-                            "numero": doc.get('numero'),
-                            "data_emissao": dt.isoformat() if dt else None,
-                            "chave": doc.get('chave')
-                        })
+                    # Lista de excluídos = monofásicos com ST incorreto
+                    if not prod_row["st_correto"]:
+                        excluidos.append(prod_row)
 
-    # ======================================================
-    # 🕒 Converter datas
-    # ======================================================
+    # Datas em ISO
     if totals['period_start']:
         totals['period_start'] = totals['period_start'].isoformat()
     if totals['period_end']:
         totals['period_end'] = totals['period_end'].isoformat()
 
-    # ======================================================
     # 💰 Cálculo tributário
-    # ======================================================
-    # Normaliza imposto_pago informado (pode vir "100x" por erro de formatação)
     if imposto_pago is not None:
         imposto_pago = parse_float_safe(imposto_pago)
 
-    faturamento = totals['total_value_sum']
+    faturamento      = totals['total_value_sum']
     receita_excluida = totals['revenue_excluded']
-    base_corrigida = faturamento - receita_excluida
+    base_corrigida   = faturamento - receita_excluida
 
-    imposto_corrigido = 0.0
-    economia_estimada = 0.0
-    imposto_pago_final = 0.0
-    aliquota_usada = 0.0
+    imposto_corrigido   = 0.0
+    economia_estimada   = 0.0
+    imposto_pago_final  = 0.0
 
     try:
         if aliquota is not None:
-            # Se vier em % (ex.: 10), converte para fração (0.10)
-            aliquota_usada = float(aliquota)
-            if aliquota_usada > 1.0:
-                aliquota_usada = aliquota_usada / 100.0
-
-            imposto_base_atual = faturamento * aliquota_usada
-            imposto_corrigido = base_corrigida * aliquota_usada
-            economia_estimada = max(0.0, imposto_base_atual - imposto_corrigido)
+            imposto_base_atual = faturamento * aliquota
+            imposto_corrigido  = base_corrigida * aliquota
+            economia_estimada  = max(0, imposto_base_atual - imposto_corrigido)
             imposto_pago_final = imposto_base_atual
-
         elif imposto_pago is not None:
-            imposto_pago_final = float(imposto_pago)
-            if faturamento > 0:
-                aliquota_media = imposto_pago_final / faturamento  # fração esperada (ex.: 0.10)
-                # Defesa: se por erro vier >= 1 (ex.: 10.0), corrige para fração
-                if aliquota_media > 1.0:
-                    aliquota_media = aliquota_media / 100.0
-                aliquota_usada = aliquota_media
-                imposto_corrigido = base_corrigida * aliquota_media
-                economia_estimada = max(0.0, imposto_pago_final - imposto_corrigido)
+            aliquota_media     = (imposto_pago / faturamento) if faturamento > 0 else 0.0
+            imposto_corrigido  = base_corrigida * aliquota_media
+            economia_estimada  = max(0, imposto_pago - imposto_corrigido)
+            imposto_pago_final = imposto_pago
     except Exception as e:
         logger.warning(f"[ANÁLISE] Falha no cálculo tributário: {e}")
         economia_estimada = 0.0
         imposto_corrigido = 0.0
 
-    # ======================================================
-    # 🧼 Sanitizar tax_summary
-    # ======================================================
     tax_summary = {
         'faturamento': faturamento,
         'base_corrigida': base_corrigida,
         'receita_excluida': receita_excluida,
         'imposto_corrigido': imposto_corrigido,
         'economia_estimada': economia_estimada,
-        'aliquota_utilizada': aliquota_usada,
+        'aliquota_utilizada': (
+            aliquota if aliquota is not None
+            else ((imposto_pago / faturamento) if (imposto_pago is not None and faturamento) else 0.0)
+        ),
         'imposto_pago': imposto_pago_final,
         'imposto_pago_informado': imposto_pago
     }
-
     for k, v in tax_summary.items():
         tax_summary[k] = safe_float(v)
 
     totals['tax_summary'] = tax_summary
     totals['products'] = produtos_raw
-    # agora cada chave é "codigo|descricao" garantindo a coluna Código no relatório
-    totals['produtos_duplicados'] = sorted(
-        [{"codigo": v["codigo"], "descricao": v["descricao"], "ocorrencias": v["ocorrencias"], "valor_total": v["valor_total"]}
-         for v in dedup_map.values()],
-        key=lambda x: x["valor_total"],
-        reverse=True
-    )
+    totals['produtos_duplicados'] = sorted(dedup_map.values(), key=lambda x: x["valor_total"], reverse=True)
     totals['produtos_excluidos'] = excluidos
 
     logger.info(f"[DEBUG ANALYSIS] tax_summary final: {tax_summary}")
     logger.info(f"[DEBUG ANALYSIS] Monofásicos totais: {totals['monofasico_total']} / ST incorretos: {totals['st_incorreta']} / sem CFOP/CSOSN: {totals['monofasico_sem_cfop_csosn']}")
-
     return totals
