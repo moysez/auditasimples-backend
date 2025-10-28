@@ -19,18 +19,15 @@ def _fmt_money(v: Any) -> str:
     return f"{n:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def _fmt_percent(frac: Any) -> str:
-    # recebe fração (0.08) e exibe "8,00%"
     try:
-        n = float(frac or 0.0) * 100.0
+        n = float(frac or 0.0)   # espera fração (ex.: 0.10) -> "10,00%"
     except Exception:
         n = 0.0
     return f"{n:,.2f}%".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def _format_table_borders(table) -> None:
-    """Adiciona bordas simples em todas as células da tabela (compatível com python-docx)."""
     tbl = table._tbl
     tblBorders = OxmlElement("w:tblBorders")
-
     for side in ("top", "left", "bottom", "right", "insideH", "insideV"):
         el = OxmlElement(f"w:{side}")
         el.set(qn("w:val"), "single")
@@ -38,7 +35,6 @@ def _format_table_borders(table) -> None:
         el.set(qn("w:space"), "0")
         el.set(qn("w:color"), "000000")
         tblBorders.append(el)
-
     tblPr = tbl.tblPr
     tblPr.append(tblBorders)
 
@@ -67,7 +63,7 @@ def gerar_relatorio_fiscal(
     itens = totals.get("items", 0) or 0
     valor_total = totals.get("total_value_sum", 0.0) or 0.0
 
-    # Tributário (garante defaults e coerência)
+    # Tributário
     faturamento = (tax.get("faturamento", None) if tax.get("faturamento", None) is not None else valor_total) or 0.0
     receita_excluida = tax.get("receita_excluida", 0.0) or 0.0
     base_corrigida = (tax.get("base_corrigida", None) if tax.get("base_corrigida", None) is not None else (faturamento - receita_excluida)) or 0.0
@@ -76,7 +72,7 @@ def gerar_relatorio_fiscal(
     economia = tax.get("economia_estimada", 0.0) or 0.0
     aliquota_frac = tax.get("aliquota_utilizada", 0.0) or 0.0  # fração, ex.: 0.08
 
-    # Erros fiscais & agrupamentos pré-computados
+    # Erros & coleções pré-computadas
     erros = totals.get("erros_fiscais") or {}
     st_corretos = erros.get("st_corretos", totals.get("st_cfop_csosn_corretos", 0) or 0)
     st_incorretos = erros.get("st_incorretos", totals.get("st_incorreta", 0) or 0)
@@ -86,11 +82,12 @@ def gerar_relatorio_fiscal(
     produtos_duplicados = erros.get("produtos_duplicados") or totals.get("produtos_duplicados") or []
     produtos = totals.get("products") or []
 
-    # Documento
     doc = Document()
     data_hoje = datetime.now().strftime("%d/%m/%Y")
 
+    # ==========================
     # CAPA
+    # ==========================
     h = doc.add_heading("Relatório de Auditoria Fiscal — (Simples Nacional)", 0)
     h.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p = doc.add_paragraph(f"{client_name}  |  CNPJ: {cnpj}")
@@ -102,7 +99,9 @@ def gerar_relatorio_fiscal(
     p3.alignment = WD_ALIGN_PARAGRAPH.CENTER
     doc.add_paragraph("")
 
+    # ==========================
     # 1. Resumo Geral
+    # ==========================
     doc.add_heading("1. Resumo Geral", level=1)
     t_resumo = doc.add_table(rows=1, cols=2)
     t_resumo.style = "Table Grid"
@@ -116,7 +115,9 @@ def gerar_relatorio_fiscal(
     _format_table_borders(t_resumo)
     doc.add_paragraph("")
 
+    # ==========================
     # 2. Resumo Tributário
+    # ==========================
     doc.add_heading("2. Resumo Tributário", level=1)
     t_trib = doc.add_table(rows=1, cols=2)
     t_trib.style = "Table Grid"
@@ -135,7 +136,9 @@ def gerar_relatorio_fiscal(
     _format_table_borders(t_trib)
     doc.add_paragraph("")
 
+    # ==========================
     # 3. Erros Fiscais
+    # ==========================
     doc.add_heading("3. Erros Fiscais", level=1)
     t_err = doc.add_table(rows=1, cols=2)
     t_err.style = "Table Grid"
@@ -150,7 +153,9 @@ def gerar_relatorio_fiscal(
     _format_table_borders(t_err)
     doc.add_paragraph("")
 
-    # 4. Itens Deduplicados (por descrição)
+    # ==========================
+    # 4. Itens Deduplicados (somente monofásicos)
+    # ==========================
     if produtos_duplicados:
         doc.add_heading("4. Itens Deduplicados (por descrição)", level=1)
         t_dup = doc.add_table(rows=1, cols=4)
@@ -173,8 +178,9 @@ def gerar_relatorio_fiscal(
         _format_table_borders(t_dup)
         doc.add_paragraph("")
 
+    # ==========================
     # 5. Detalhamento Analítico dos Itens Excluídos (por mês)
-    # Considera item “excluído” se for monofásico e tiver tributação incorreta
+    # ==========================
     produtos_excluidos = []
     for it in (totals.get("products") or []):
         if it.get("monofasico") and not it.get("st_correto"):
@@ -198,13 +204,13 @@ def gerar_relatorio_fiscal(
         for mes, lista in sorted(grupos.items()):
             doc.add_heading(f"Mês de referência: {mes}", level=2)
 
-            # agora com CFOP e CST/CSOSN
+            # + CFOP / CSOSN adicionados
             tabela = doc.add_table(rows=1, cols=12)
             tabela.style = "Table Grid"
             headers = [
-                "Data", "Documento", "Código", "Descrição", "NCM",
-                "CFOP", "CST/CSOSN", "NCM/CEST Recomendado", "Qtd",
-                "Vlr Unit", "Vlr Total", "Chave"
+                "Data","Documento","Código","Descrição","NCM",
+                "CFOP","CST/CSOSN","NCM/CEST Recomendado",
+                "Qtd","Vlr Unit","Vlr Total","Chave"
             ]
             for idx, htxt in enumerate(headers):
                 tabela.cell(0, idx).text = htxt
@@ -236,14 +242,18 @@ def gerar_relatorio_fiscal(
         doc.add_paragraph(f"TOTAL GERAL DOS ITENS EXCLUÍDOS: R$ {_fmt_money(total_geral)}")
         doc.add_paragraph("")
 
+    # ==========================
     # 6. Fundamentação Legal
+    # ==========================
     doc.add_heading("6. Fundamentação Legal", level=1)
     doc.add_paragraph("• Lei nº 10.147/2000 — regime monofásico de PIS/COFINS.")
     doc.add_paragraph("• Lei Complementar nº 123/2006 — art. 18 § 4º-A.")
     doc.add_paragraph("• Resolução CGSN nº 140/2018 — art. 25, § 4º.")
     doc.add_paragraph("Conclusão: a receita monofásica deve ser excluída da base de cálculo do DAS.")
 
+    # ==========================
     # 7. Estimativa de Restituição
+    # ==========================
     doc.add_heading("7. Estimativa de Restituição", level=1)
     economia_anual = float(economia) * 12.0
     p_est1 = doc.add_paragraph(f"💰 R$ {_fmt_money(economia)} por mês (estimado)")
@@ -251,22 +261,25 @@ def gerar_relatorio_fiscal(
     p_est2 = doc.add_paragraph(f"📅 Em um ano: R$ {_fmt_money(economia_anual)}")
     p_est2.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
+    # ==========================
     # 8. Próximos Passos
+    # ==========================
     doc.add_heading("8. Próximos Passos", level=1)
-    passos = [
+    for s in [
         "1. Conferir dados no PGDAS-D.",
         "2. Retificar períodos passados (se aplicável).",
         "3. Preparar pedido de restituição/compensação.",
         "4. Acompanhar até o reembolso.",
-    ]
-    for s in passos:
+    ]:
         doc.add_paragraph(s)
 
+    # ==========================
     # 9. Assinatura Digital
+    # ==========================
     doc.add_heading("9. Assinatura Digital", level=1)
     doc.add_paragraph("[NOME DO RESPONSÁVEL]")
     doc.add_paragraph("CRC / OAB / CNPJ")
-    doc.add_paragraph(f"Data: {data_hoje}")
+    doc.add_paragraph(f"Data: {datetime.now().strftime('%d/%m/%Y')}")
 
     # Salvar
     filename = f"Relatorio_Fiscal_Auditoria_Monofasica_{client_name.replace(' ', '_')}.docx"
