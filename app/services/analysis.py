@@ -17,13 +17,43 @@ def _has_valid_ncm(ncm: str) -> bool:
     n = (ncm or '').strip()
     return len(n) == 8 and n.isdigit()
 
-def parse_float_safe(value) -> float:
-    if isinstance(value, str):
-        value = value.replace('.', '').replace(',', '.')
-    try:
-        return float(value)
-    except (TypeError, ValueError):
+def parse_money_brl(value) -> float:
+    """
+    Converte strings ou números em float (R$).
+    Aceita '3.365,99', '3365,99', '3365.99', 3365.99 ou 336599 (centavos).
+    """
+    if value is None:
         return 0.0
+    if isinstance(value, (int, float)):
+        v = float(value)
+    else:
+        s = str(value).strip().replace("R$", "").replace(" ", "")
+        if "," in s and s.count(",") == 1:
+            s = s.replace(".", "")
+            s = s.replace(",", ".")
+        try:
+            v = float(s)
+        except Exception:
+            return 0.0
+    return float(v)
+
+def parse_percent(value) -> float:
+    """
+    Converte entradas como '10,2', '10.2', '10', 10.2, 0.102 em fração (0.102).
+    """
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        v = float(value)
+    else:
+        s = str(value).strip().replace("%", "").replace(" ", "").replace("R$", "")
+        if "," in s and s.count(",") == 1:
+            s = s.replace(".", "").replace(",", ".")
+        try:
+            v = float(s)
+        except Exception:
+            return None
+    return v / 100.0 if v >= 1.0 else v
 
 def safe_float(value):
     try:
@@ -33,31 +63,22 @@ def safe_float(value):
 
 def init_totals() -> dict:
     return {
-        # 📊 Documentos e valores
         'documents': 0,
         'total_value_sum': 0.0,
         'period_start': None,
         'period_end': None,
         'items': 0,
-
-        # 💰 Receita monofásica a excluir
         'revenue_excluded': 0.0,
         'revenue_excluded_breakdown': {},
         'st_correct_items_value': 0.0,
-
-        # 🧾 Indicadores fiscais
         'monofasico_palavra_chave': 0,
         'monofasico_sem_ncm': 0,
         'st_cfop_csosn_corretos': 0,
         'st_incorreta': 0,
         'erros_ncm_categoria': 0,
         'erros_outros': 0,
-
-        # 📊 Contadores auxiliares
         'monofasico_total': 0,
         'monofasico_sem_cfop_csosn': 0,
-
-        # 📊 Resultado tributário
         'tax_summary': {}
     }
 
@@ -66,9 +87,14 @@ def init_totals() -> dict:
 # -------------------------------------------------
 def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pago: float = None) -> Dict[str, Any]:
     totals = init_totals()
-    produtos_raw = []   # apenas monofásicos (para relatório)
-    dedup_map = {}      # deduplicados — apenas monofásicos
-    excluidos = []      # monofásicos tributados incorretamente
+
+    # 🔧 Normaliza entradas do usuário
+    aliquota_frac = parse_percent(aliquota) if aliquota is not None else None
+    imposto_pago_input = parse_money_brl(imposto_pago) if imposto_pago is not None else None
+
+    produtos_raw = []
+    dedup_map = {}
+    excluidos = []
 
     with zipfile.ZipFile(io.BytesIO(zip_bytes), 'r') as zf:
         for name in zf.namelist():
@@ -142,15 +168,14 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
                         "chave": doc.get('chave'),
                         "monofasico": True,
                         "st_correto": (cfop == "5405" and csosn == "500"),
-                        # campos “recomendado” podem ser preenchidos futuramente pelo seu dicionário
                         "ncm_recomendado": None,
                         "cest": item.get('cest') or None,
                         "cest_recomendado": None,
                     }
                     produtos_raw.append(prod_row)
 
-                    # Deduplicação (chave = descrição)
-                    key = desc.lower()
+                    # 📊 Deduplicação por código + descrição
+                    key = (cprod.lower(), desc.lower())
                     if key not in dedup_map:
                         dedup_map[key] = {
                             "codigo": cprod,
@@ -162,39 +187,37 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
                         dedup_map[key]["ocorrencias"] += 1
                         dedup_map[key]["valor_total"] += vprod
 
-                    # Lista de excluídos = monofásicos com ST incorreto
                     if not prod_row["st_correto"]:
                         excluidos.append(prod_row)
 
-    # Datas em ISO
     if totals['period_start']:
         totals['period_start'] = totals['period_start'].isoformat()
     if totals['period_end']:
         totals['period_end'] = totals['period_end'].isoformat()
 
-    # 💰 Cálculo tributário
-    if imposto_pago is not None:
-        imposto_pago = parse_float_safe(imposto_pago)
-
-    faturamento      = totals['total_value_sum']
+    faturamento = totals['total_value_sum']
     receita_excluida = totals['revenue_excluded']
-    base_corrigida   = faturamento - receita_excluida
+    base_corrigida = faturamento - receita_excluida
 
-    imposto_corrigido   = 0.0
-    economia_estimada   = 0.0
-    imposto_pago_final  = 0.0
+    imposto_corrigido = 0.0
+    economia_estimada = 0.0
+    imposto_pago_final = 0.0
 
     try:
-        if aliquota is not None:
-            imposto_base_atual = faturamento * aliquota
-            imposto_corrigido  = base_corrigida * aliquota
-            economia_estimada  = max(0, imposto_base_atual - imposto_corrigido)
+        if aliquota_frac is not None:
+            imposto_base_atual = faturamento * aliquota_frac
+            imposto_corrigido = base_corrigida * aliquota_frac
+            economia_estimada = max(0, imposto_base_atual - imposto_corrigido)
             imposto_pago_final = imposto_base_atual
-        elif imposto_pago is not None:
-            aliquota_media     = (imposto_pago / faturamento) if faturamento > 0 else 0.0
-            imposto_corrigido  = base_corrigida * aliquota_media
-            economia_estimada  = max(0, imposto_pago - imposto_corrigido)
-            imposto_pago_final = imposto_pago
+        elif imposto_pago_input is not None:
+            imposto_bruto = imposto_pago_input
+            if faturamento > 0 and imposto_bruto > (faturamento * 3):
+                imposto_bruto = imposto_bruto / 100.0
+
+            aliquota_media = (imposto_bruto / faturamento) if faturamento > 0 else 0.0
+            imposto_corrigido = base_corrigida * aliquota_media
+            economia_estimada = max(0, imposto_bruto - imposto_corrigido)
+            imposto_pago_final = imposto_bruto
     except Exception as e:
         logger.warning(f"[ANÁLISE] Falha no cálculo tributário: {e}")
         economia_estimada = 0.0
@@ -207,12 +230,13 @@ def run_analysis_from_bytes(zip_bytes: bytes, aliquota: float = None, imposto_pa
         'imposto_corrigido': imposto_corrigido,
         'economia_estimada': economia_estimada,
         'aliquota_utilizada': (
-            aliquota if aliquota is not None
-            else ((imposto_pago / faturamento) if (imposto_pago is not None and faturamento) else 0.0)
+            aliquota_frac if aliquota_frac is not None
+            else ((imposto_pago_final / faturamento) if faturamento > 0 else 0.0)
         ),
         'imposto_pago': imposto_pago_final,
-        'imposto_pago_informado': imposto_pago
+        'imposto_pago_informado': imposto_pago_input
     }
+
     for k, v in tax_summary.items():
         tax_summary[k] = safe_float(v)
 
