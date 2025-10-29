@@ -7,8 +7,10 @@ from ..db import get_session as get_db
 from app.models import Upload
 from app.services.analysis import run_analysis_from_bytes  # <- seu motor principal de auditoria
 
-router = APIRouter(prefix="/uploads", tags=["Uploads"])
+# antes:
+# router = APIRouter(prefix="/uploads", tags=["Uploads"])
 
+router = APIRouter(tags=["Uploads"])  # ✅ sem prefixo
 
 def get_zip_bytes_from_db(upload_id: int, db: Session) -> bytes:
     upload = db.query(Upload).filter(Upload.id == upload_id).first()
