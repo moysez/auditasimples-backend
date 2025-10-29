@@ -10,6 +10,12 @@ from app.services.analysis import run_analysis_from_bytes  # <- seu motor princi
 router = APIRouter(prefix="/uploads", tags=["Uploads"])
 
 
+def get_zip_bytes_from_db(upload_id: int, db: Session) -> bytes:
+    upload = db.query(Upload).filter(Upload.id == upload_id).first()
+    if not upload:
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+    return bytes(upload.filepath)
+
 # ============================================================
 # 🔼 1. UPLOAD de arquivo ZIP/XML — salva BINÁRIO no banco
 # ============================================================
