@@ -190,67 +190,67 @@ def gerar_relatorio_fiscal(
         _format_table_borders(t_dup)
         doc.add_paragraph("")
 
-# ==========================
-# 5. Detalhamento Analítico dos Itens Excluídos
-# ==========================
-produtos_excluidos = []
-for it in produtos:
-    if it.get("monofasico") and not it.get("st_correto"):
-        produtos_excluidos.append(it)
-
-if produtos_excluidos:
-    doc.add_heading("5. Detalhamento Analítico dos Itens Excluídos", level=1)
-
-    grupos = defaultdict(list)
-    for item in produtos_excluidos:
-        data = item.get("data_emissao")
-        mes_ref = "Sem Data"
-        if data:
-            try:
-                mes_ref = datetime.fromisoformat(str(data)).strftime("%Y-%m")
-            except Exception:
-                mes_ref = str(data)
-        grupos[mes_ref].append(item)
-
-    total_geral = 0.0
-    for mes, lista in sorted(grupos.items()):
-        doc.add_heading(f"Mês de referência: {mes}", level=2)
-
-        tabela = doc.add_table(rows=1, cols=12)
-        tabela.style = "Table Grid"
-        headers = [
-            "Data", "Documento", "Série", "Código", "Descrição",
-            "NCM", "CFOP", "CSOSN", "Qtd", "Vlr Unit", "Vlr Total", "Chave"
-        ]
-
-        for idx, htxt in enumerate(headers):
-            tabela.cell(0, idx).text = htxt
-            tabela.cell(0, idx).paragraphs[0].runs[0].bold = True
-
-        subtotal_mes = 0.0
-        for it in lista:
-            r = tabela.add_row().cells
-            r[0].text = str(it.get("data_emissao") or "-")
-            r[1].text = str(it.get("numero") or "-")
-            r[2].text = str(it.get("serie") or "-")                 # 👈 novo campo
-            r[3].text = str(it.get("codigo") or "-")
-            r[4].text = str(it.get("descricao") or "-")
-            r[5].text = str(it.get("ncm") or "-")
-            r[6].text = str(it.get("cfop") or "-")                  # 👈 CFOP
-            r[7].text = str(it.get("csosn") or "-")                 # 👈 CSOSN
-            r[8].text = str(it.get("quantidade") or "-")
-            r[9].text = f"R$ {_fmt_money(it.get('valor_unitario') or 0)}"
-            vtotal = float(it.get("valor_total") or 0.0)
-            r[10].text = f"R$ {_fmt_money(vtotal)}"
-            r[11].text = str(it.get("chave") or "-")                # 👈 chave NFe
-            subtotal_mes += vtotal
-
-        _format_table_borders(tabela)
-        doc.add_paragraph(f"Subtotal mês {mes}: R$ {_fmt_money(subtotal_mes)}")
-        total_geral += subtotal_mes
-
-    doc.add_paragraph(f"TOTAL GERAL DOS ITENS EXCLUÍDOS: R$ {_fmt_money(total_geral)}")
-    doc.add_paragraph("")
+    # ==========================
+    # 5. Detalhamento Analítico dos Itens Excluídos
+    # ==========================
+    produtos_excluidos = []
+    for it in produtos:
+        if it.get("monofasico") and not it.get("st_correto"):
+            produtos_excluidos.append(it)
+    
+    if produtos_excluidos:
+        doc.add_heading("5. Detalhamento Analítico dos Itens Excluídos", level=1)
+    
+        grupos = defaultdict(list)
+        for item in produtos_excluidos:
+            data = item.get("data_emissao")
+            mes_ref = "Sem Data"
+            if data:
+                try:
+                    mes_ref = datetime.fromisoformat(str(data)).strftime("%Y-%m")
+                except Exception:
+                    mes_ref = str(data)
+            grupos[mes_ref].append(item)
+    
+        total_geral = 0.0
+        for mes, lista in sorted(grupos.items()):
+            doc.add_heading(f"Mês de referência: {mes}", level=2)
+    
+            tabela = doc.add_table(rows=1, cols=12)
+            tabela.style = "Table Grid"
+            headers = [
+                "Data", "Documento", "Série", "Código", "Descrição",
+                "NCM", "CFOP", "CSOSN", "Qtd", "Vlr Unit", "Vlr Total", "Chave"
+            ]
+    
+            for idx, htxt in enumerate(headers):
+                tabela.cell(0, idx).text = htxt
+                tabela.cell(0, idx).paragraphs[0].runs[0].bold = True
+    
+            subtotal_mes = 0.0
+            for it in lista:
+                r = tabela.add_row().cells
+                r[0].text = str(it.get("data_emissao") or "-")
+                r[1].text = str(it.get("numero") or "-")
+                r[2].text = str(it.get("serie") or "-")                 # 👈 novo campo
+                r[3].text = str(it.get("codigo") or "-")
+                r[4].text = str(it.get("descricao") or "-")
+                r[5].text = str(it.get("ncm") or "-")
+                r[6].text = str(it.get("cfop") or "-")                  # 👈 CFOP
+                r[7].text = str(it.get("csosn") or "-")                 # 👈 CSOSN
+                r[8].text = str(it.get("quantidade") or "-")
+                r[9].text = f"R$ {_fmt_money(it.get('valor_unitario') or 0)}"
+                vtotal = float(it.get("valor_total") or 0.0)
+                r[10].text = f"R$ {_fmt_money(vtotal)}"
+                r[11].text = str(it.get("chave") or "-")                # 👈 chave NFe
+                subtotal_mes += vtotal
+    
+            _format_table_borders(tabela)
+            doc.add_paragraph(f"Subtotal mês {mes}: R$ {_fmt_money(subtotal_mes)}")
+            total_geral += subtotal_mes
+    
+        doc.add_paragraph(f"TOTAL GERAL DOS ITENS EXCLUÍDOS: R$ {_fmt_money(total_geral)}")
+        doc.add_paragraph("")
 
     # ==========================
     # 6. Fundamentação Legal
@@ -293,7 +293,7 @@ if produtos_excluidos:
     doc.add_paragraph(f"Data: {data_hoje}")
 
     # Salvar
-    filename = f"Relatorio_Fiscal_Auditoria_Monofasica_{client_name.replace(' ', '_')}.docx"
+    filename = f"Relatorio_Auditoria_Fiscal__{client_name.replace(' ', '_')}.docx"
     path = os.path.join("/tmp", filename)
     doc.save(path)
     return path
