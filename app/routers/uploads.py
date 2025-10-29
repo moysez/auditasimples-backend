@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 import io
 
-from app.database import get_db
+from ..db import get_session as get_db
 from app.models import Upload
 from app.services.analysis import run_analysis_from_bytes  # <- seu motor principal de auditoria
 
