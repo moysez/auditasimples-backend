@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, LargeBinary, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, LargeBinary, func, JSON
 from datetime import datetime
+from sqlalchemy.orm import relationship
 from .db import Base
 
 # 👤 Usuário
@@ -12,7 +13,8 @@ class User(Base):
     role = Column(String(50), default="admin")
     created_at = Column(DateTime, default=datetime.utcnow)
 
-# 🏢 Empresa
+
+# 🏢 Empresa / Cliente
 class Client(Base):
     __tablename__ = "clients"
     id = Column(Integer, primary_key=True)
@@ -20,14 +22,23 @@ class Client(Base):
     cnpj = Column(String(20), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # ✅ Relação reversa com Uploads
+    uploads = relationship("Upload", back_populates="client")
+
+
 # 📤 Upload de Arquivos ZIP
 class Upload(Base):
     __tablename__ = "uploads"
-    id = Column(Integer, primary_key=True)
+
+    id = Column(Integer, primary_key=True, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
-    filename = Column(String(255), nullable=False)
-    file_data = Column(LargeBinary, nullable=False)  # 🆕 Salva arquivo direto no banco
-    created_at = Column(DateTime, default=datetime.utcnow)
+    filename = Column(String, nullable=False)
+    filepath = Column(LargeBinary, nullable=False)
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # ✅ Relação bidirecional com Client
+    client = relationship("Client", back_populates="uploads")
+
 
 # 📊 Relatórios / Análises
 class Report(Base):
