@@ -54,9 +54,11 @@ async def upload_file(
         }
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()   # 👈 adiciona isso
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao salvar arquivo: {e}")
-
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar arquivo: {str(e)}")
+    
 
 # ============================================================
 # 📂 2. LISTAR arquivos enviados por cliente
