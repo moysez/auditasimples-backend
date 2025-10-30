@@ -16,7 +16,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
 )
-logger = logging.getLogger("auditassimples")
+logger = logging.getLogger("auditasimples")
 
 # Inicializa o app
 app = FastAPI(
@@ -28,19 +28,18 @@ app = FastAPI(
 # ============================================================
 # 🌐 CONFIGURAÇÃO DE CORS
 # ============================================================
-# Domínios autorizados
+# Domínios corretos e liberados
 origins = [
-    "https://auditassimples.io",
-    "https://www.auditassimples.io",
+    "https://auditasimples.io",
+    "https://www.auditasimples.io",
     "http://localhost:5500",
     "http://127.0.0.1:5500"
 ]
 
-# Middleware de CORS com fallback (para evitar bloqueio no navegador)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,          # Domínios específicos
-    allow_origin_regex=".*",        # Garante compatibilidade com subdomínios
+    allow_origins=origins,          # Domínios explícitos
+    allow_origin_regex=".*",        # Libera também subdomínios e variações
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -70,5 +69,5 @@ def health_check():
 # ============================================================
 # 🏁 LOG DE INICIALIZAÇÃO
 # ============================================================
-logger.info("✅ AuditaSimples API iniciada com sucesso e CORS liberado.")
-logger.info("🌍 Domínios permitidos: %s", ", ".join(origins))
+logger.info("✅ AuditaSimples API iniciada com sucesso.")
+logger.info("🌍 CORS habilitado para: %s", ", ".join(origins))
