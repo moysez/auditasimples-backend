@@ -8,11 +8,12 @@ from ..routers.auth import get_current_user
 
 # 📍 Caminho do arquivo do dicionário
 DICTIONARY_FILE = Path(__file__).resolve().parent.parent / "data" / "monofasicos.json"
+router = APIRouter()
 
-router = APIRouter(
-    tags=["Dictionary"]
-)
-
+@router.get("/")
+def dictionary_root():
+    # Mantido para compatibilidade — preencha à vontade depois.
+    return {"status": "ok"}
 
 class DictionaryUpdate(BaseModel):
     categoria: str
