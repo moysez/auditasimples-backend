@@ -26,7 +26,8 @@ pydantic-settings==2.4.0
 python-dotenv==1.0.1
 loguru==0.7.2
 lxml==5.3.0
-
+PyJWT[crypto]
+jinja2
 # ============================
 # 📧 AI
 # ============================
