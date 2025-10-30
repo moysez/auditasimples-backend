@@ -2,6 +2,14 @@ from pydantic import BaseModel
 from typing import Optional, Any, Dict, List
 from datetime import datetime
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+
 class ClientCreate(BaseModel):
     name: str
     cnpj: Optional[str] = None
