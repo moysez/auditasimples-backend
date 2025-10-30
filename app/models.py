@@ -68,18 +68,15 @@ class Dictionary(Base):
 # ============================================================
 # 📤 UPLOADS (NF-e, NFC-e, SAT)
 # ============================================================
+
 class Upload(Base):
     __tablename__ = "uploads"
 
-    id = Column(Integer, primary_key=True, index=True)
-    filename = Column(String(255))
-    filepath = Column(String(255))
-    filetype = Column(String(50))
-    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
-    user_id = Column(Integer, ForeignKey("users.id"))
-
-    user = relationship("User", back_populates="uploads")
-
+    id          = Column(Integer, primary_key=True, index=True)
+    client_id   = Column(Integer, nullable=False, index=True)
+    filename    = Column(String(255), nullable=False)
+    filepath    = Column(String(1024), nullable=False)
+    uploaded_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 # ============================================================
 # 🧮 LOG DE AUDITORIAS / AÇÕES
