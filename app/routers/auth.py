@@ -1,82 +1,91 @@
-from fastapi import APIRouter, HTTPException, Depends, Form, status
+import os
+import logging
+from fastapi import APIRouter, HTTPException, Form, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from jose import jwt
 from datetime import datetime, timedelta
-from pydantic import BaseModel
-from fastapi.security import OAuth2PasswordBearer
-from passlib.context import CryptContext  # ✅ Novo import
+import jwt
+from passlib.context import CryptContext
 
 from ..db import get_session
-from ..models.user import User
-from ..config import settings
+from app.models import User
 
-# ✅ APENAS UM ROUTER
-router = APIRouter(
-    tags=["Auth"]
-)
+# ------------------------------------------------------------
+# ⚙️ Configuração geral
+# ------------------------------------------------------------
+router = APIRouter(tags=["Autenticação"])
 
-# 📦 Modelo opcional
-class LoginPayload(BaseModel):
-    username: str
-    password: str
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
-
-# 🧠 Funções que estavam no services.auth
+logger = logging.getLogger("auditassimples.auth")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+SECRET_KEY = os.getenv("JWT_SECRET", "chave-secreta-supersegura")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 240
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
+IS_RENDER = os.getenv("ENV", "local").lower() == "render"
+
+
+# ------------------------------------------------------------
+# 🔐 Funções auxiliares
+# ------------------------------------------------------------
+def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
-def create_access_token(data: dict, expires_delta: int = 3600):
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(seconds=expires_delta)
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# 🧑‍💻 Login com usuário fixo (admin)
+
+# ------------------------------------------------------------
+# 🧾 Login de usuário
+# ------------------------------------------------------------
 @router.post("/login")
-def login_admin(username: str = Form(...), password: str = Form(...)):
-    if username == settings.ADMIN_USER and password == settings.ADMIN_PASS:
+def login(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_session)):
+    try:
+        user = db.query(User).filter(User.username == username).first()
+
+        if not user:
+            raise HTTPException(status_code=401, detail="Usuário não encontrado")
+
+        if not verify_password(password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Senha incorreta")
+
         token = create_access_token({"sub": username})
-        return {"access_token": token, "token_type": "bearer"}
-    raise HTTPException(status_code=401, detail="Credenciais inválidas")
+        logger.info(f"✅ Login bem-sucedido: {username}")
 
-# 🧑‍💻 Login no banco de dados
-@router.post("/login-db")
-def login_db(
-    email: str = Form(...),
-    password: str = Form(...),
-    db: Session = Depends(get_session)
-):
-    user = db.query(User).filter_by(email=email).first()
-    if not user or not verify_password(password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Credenciais inválidas")
-    token = create_access_token({"sub": str(user.id)})
-    return {"access_token": token, "token_type": "bearer"}
+        return JSONResponse(content={
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {"id": user.id, "username": user.username},
+            "environment": "Render" if IS_RENDER else "Local"
+        })
 
-# 🧾 Registro de usuário
+    except Exception as e:
+        logger.exception("Erro inesperado no login")
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
+
+# ------------------------------------------------------------
+# 👤 Criação de usuário (para testes locais)
+# ------------------------------------------------------------
 @router.post("/register")
-def register_user(
-    email: str = Form(...),
-    password: str = Form(...),
-    db: Session = Depends(get_session)
-):
-    if db.query(User).filter_by(email=email).first():
+def register_user(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_session)):
+    """Endpoint opcional — útil apenas em ambiente local para criar usuários."""
+    if IS_RENDER:
+        raise HTTPException(status_code=403, detail="Criação de usuários desabilitada no ambiente de produção.")
+
+    from app.models import User
+
+    if db.query(User).filter(User.username == username).first():
         raise HTTPException(status_code=400, detail="Usuário já existe")
-    user = User(email=email, hashed_password=get_password_hash(password))
+
+    hashed_password = pwd_context.hash(password)
+    user = User(username=username, password_hash=hashed_password)
     db.add(user)
     db.commit()
-    return {"message": "Usuário criado com sucesso"}
+    db.refresh(user)
 
-# 🔐 Validar token recebido
-def get_current_user(token: str = Depends(oauth2_scheme)):
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido ou ausente"
-        )
-    return {"token": token}
+    logger.info(f"👤 Usuário criado: {username}")
+    return {"message": "Usuário criado com sucesso", "user_id": user.id}
