@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from app.db import Base, engine
@@ -11,14 +11,14 @@ from app.routers import auth, uploads, dashboard, dictionary, clients, company
 # Cria tabelas automaticamente se não existirem
 Base.metadata.create_all(bind=engine)
 
-# Logger global configurado para exibir logs no Render
+# Logger global
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
 )
 logger = logging.getLogger("auditasimples")
 
-# Inicializa o app
+# Instância principal
 app = FastAPI(
     title="AuditaSimples API",
     description="API fiscal e tributária automatizada do AuditaSimples",
@@ -26,9 +26,8 @@ app = FastAPI(
 )
 
 # ============================================================
-# 🌐 CONFIGURAÇÃO DE CORS
+# 🌐 CORS
 # ============================================================
-# Domínios corretos e liberados
 origins = [
     "https://auditasimples.io",
     "https://www.auditasimples.io",
@@ -38,12 +37,25 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,          # Domínios explícitos
-    allow_origin_regex=".*",        # Libera também subdomínios e variações
+    allow_origins=origins,
+    allow_origin_regex=".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ============================================================
+# ✅ HANDLER GLOBAL PARA OPTIONS (resolve erro 405)
+# ============================================================
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(rest_of_path: str):
+    """Responde a qualquer requisição OPTIONS para evitar erro 405."""
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "*",
+    }
+    return Response(status_code=200, headers=headers)
 
 # ============================================================
 # 📦 REGISTRO DOS ROUTERS
@@ -60,14 +72,10 @@ app.include_router(company.router, prefix="/api/company", tags=["Company"])
 # ============================================================
 @app.get("/health")
 def health_check():
-    """
-    Endpoint de verificação do status do serviço.
-    Usado pelo Render e testes locais.
-    """
     return {"status": "ok", "message": "AuditaSimples API funcionando corretamente"}
 
 # ============================================================
-# 🏁 LOG DE INICIALIZAÇÃO
+# 🏁 LOG FINAL
 # ============================================================
-logger.info("✅ AuditaSimples API iniciada com sucesso.")
-logger.info("🌍 CORS habilitado para: %s", ", ".join(origins))
+logger.info("✅ AuditaSimples API iniciada com sucesso e CORS ativo.")
+logger.info("🌍 Domínios permitidos: %s", ", ".join(origins))
