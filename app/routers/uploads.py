@@ -1,67 +1,37 @@
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Form
 from sqlalchemy.orm import Session
 from typing import List
-import io
+import os
 
 from ..db import get_session as get_db
 from app.models import Upload
-from app.services.analysis import run_analysis_from_bytes  # <- seu motor principal de auditoria
+from app.services.analysis import run_analysis_from_bytes
 
-# antes:
-# router = APIRouter(prefix="/uploads", tags=["Uploads"])
+router = APIRouter(tags=["Uploads"])
 
-router = APIRouter(tags=["Uploads"])  # ✅ sem prefixo
-
-def get_zip_bytes_from_db(upload_id: int, db: Session) -> bytes:
-    upload = db.query(Upload).filter(Upload.id == upload_id).first()
-    if not upload:
-        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
-    return bytes(upload.filepath)
 
 # ============================================================
-# 🔼 1. UPLOAD de arquivo ZIP/XML — salva BINÁRIO no banco
+# 🆕 1. Registrar caminho local (sem upload)
 # ============================================================
-@router.post("/")
-async def upload_file(
+@router.post("/path")
+def register_local_path(
     client_id: int = Form(...),
-    file: UploadFile = File(...),
+    filename: str = Form(...),
+    filepath: str = Form(...),
     db: Session = Depends(get_db)
 ):
-    try:
-        # Lê o arquivo em blocos de 4 MB (para evitar SSL timeout)
-        CHUNK_SIZE = 4 * 1024 * 1024
-        binary_data = b""
-        while chunk := await file.read(CHUNK_SIZE):
-            binary_data += chunk
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=400, detail="Caminho local não encontrado.")
 
-        if not binary_data:
-            raise HTTPException(status_code=400, detail="Arquivo vazio ou inválido")
+    new_upload = Upload(client_id=client_id, filename=filename, filepath=filepath)
+    db.add(new_upload)
+    db.commit()
+    db.refresh(new_upload)
+    return {"message": "Caminho salvo com sucesso", "upload_id": new_upload.id}
 
-        new_upload = Upload(
-            client_id=client_id,
-            filename=file.filename,
-            filepath=binary_data  # coluna BYTEA
-        )
-        db.add(new_upload)
-        db.commit()
-        db.refresh(new_upload)
-
-        return {
-            "status": "ok",
-            "id": new_upload.id,
-            "filename": new_upload.filename,
-            "size_bytes": len(binary_data)
-        }
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()   # 👈 adiciona isso
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao salvar arquivo: {str(e)}")
-    
 
 # ============================================================
-# 📂 2. LISTAR arquivos enviados por cliente
+# 📋 2. Listar arquivos registrados por cliente
 # ============================================================
 @router.get("/list", response_model=List[dict])
 def list_files(client_id: int, db: Session = Depends(get_db)):
@@ -71,51 +41,29 @@ def list_files(client_id: int, db: Session = Depends(get_db)):
             "id": u.id,
             "filename": u.filename,
             "uploaded_at": u.uploaded_at.strftime("%Y-%m-%d %H:%M:%S"),
-            "size_kb": round(len(u.filepath or b"") / 1024, 2)
+            "path": u.filepath,
         }
         for u in uploads
     ]
 
 
 # ============================================================
-# 🔍 3. RODAR ANÁLISE diretamente de um upload salvo
+# 🔍 3. Rodar análise diretamente a partir do caminho local
 # ============================================================
 @router.get("/analyze/{upload_id}")
 def analyze_upload(upload_id: int, db: Session = Depends(get_db)):
     upload = db.query(Upload).filter(Upload.id == upload_id).first()
     if not upload:
-        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+        raise HTTPException(status_code=404, detail="Registro não encontrado")
 
     try:
-        zip_bytes = bytes(upload.filepath)
+        with open(upload.filepath, "rb") as f:
+            zip_bytes = f.read()
         result = run_analysis_from_bytes(zip_bytes)
         return {
             "status": "ok",
             "summary": result.get("tax_summary"),
-            "totals": {
-                "faturamento": result["tax_summary"].get("faturamento", 0),
-                "receita_excluida": result["tax_summary"].get("receita_excluida", 0),
-                "imposto_corrigido": result["tax_summary"].get("imposto_corrigido", 0),
-                "economia_estimada": result["tax_summary"].get("economia_estimada", 0),
-            }
+            "totals": result["tax_summary"]
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro na análise: {e}")
-
-
-# ============================================================
-# ⬇️ 4. DOWNLOAD (retorna o ZIP original)
-# ============================================================
-from fastapi.responses import StreamingResponse
-
-@router.get("/download/{upload_id}")
-def download_file(upload_id: int, db: Session = Depends(get_db)):
-    upload = db.query(Upload).filter(Upload.id == upload_id).first()
-    if not upload:
-        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
-
-    file_stream = io.BytesIO(upload.filepath)
-    headers = {
-        "Content-Disposition": f"attachment; filename={upload.filename}"
-    }
-    return StreamingResponse(file_stream, headers=headers, media_type="application/zip")
+        raise HTTPException(status_code=500, detail=f"Erro na análise: {str(e)}")
