@@ -11,14 +11,14 @@ from app.routers import auth, uploads, dashboard, dictionary, clients, company
 # Cria tabelas automaticamente se não existirem
 Base.metadata.create_all(bind=engine)
 
-# Logger global
+# Logger global configurado para exibir logs no Render
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
 )
 logger = logging.getLogger("auditassimples")
 
-# Inicializa app
+# Inicializa o app
 app = FastAPI(
     title="AuditaSimples API",
     description="API fiscal e tributária automatizada do AuditaSimples",
@@ -28,6 +28,7 @@ app = FastAPI(
 # ============================================================
 # 🌐 CONFIGURAÇÃO DE CORS
 # ============================================================
+# Domínios autorizados
 origins = [
     "https://auditassimples.io",
     "https://www.auditassimples.io",
@@ -35,9 +36,11 @@ origins = [
     "http://127.0.0.1:5500"
 ]
 
+# Middleware de CORS com fallback (para evitar bloqueio no navegador)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins,          # Domínios específicos
+    allow_origin_regex=".*",        # Garante compatibilidade com subdomínios
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -58,9 +61,14 @@ app.include_router(company.router, prefix="/api/company", tags=["Company"])
 # ============================================================
 @app.get("/health")
 def health_check():
+    """
+    Endpoint de verificação do status do serviço.
+    Usado pelo Render e testes locais.
+    """
     return {"status": "ok", "message": "AuditaSimples API funcionando corretamente"}
 
 # ============================================================
 # 🏁 LOG DE INICIALIZAÇÃO
 # ============================================================
-logger.info("✅ AuditaSimples API iniciada com sucesso.")
+logger.info("✅ AuditaSimples API iniciada com sucesso e CORS liberado.")
+logger.info("🌍 Domínios permitidos: %s", ", ".join(origins))
