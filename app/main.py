@@ -1,7 +1,7 @@
 import os
-import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import logging
 from fastapi.responses import JSONResponse
 from app.db import Base, engine
 Base.metadata.create_all(bind=engine)
