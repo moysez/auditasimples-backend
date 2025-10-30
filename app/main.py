@@ -20,8 +20,10 @@ app = FastAPI(
 # Criação automática das tabelas (se ainda não existirem)
 Base.metadata.create_all(bind=engine)
 
+from fastapi.middleware.cors import CORSMiddleware
+
 # =========================================
-# 🌐 CORS — libera acesso do frontend
+# 🌐 CORS — liberar domínios autorizados
 # =========================================
 origins = [
     "https://auditassimples.io",
@@ -33,7 +35,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins,          # 🔥 exato (não use "*")
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
