@@ -1,4 +1,5 @@
 import logging
+from app.models import Upload
 from collections import defaultdict
 from pathlib import Path
 import json
@@ -10,7 +11,7 @@ from fastapi.responses import FileResponse
 
 from ..db import get_session
 from ..services.analysis import run_analysis_from_bytes
-from ..routers.uploads import get_zip_bytes_from_db
+# from ..routers.uploads import get_zip_bytes_from_db
 from ..services.report_docx import gerar_relatorio_fiscal
 
 # 🧭 Configuração de logging
@@ -80,9 +81,17 @@ def get_dashboard(
         imp_pago_in = float(imposto_pago) if imposto_pago is not None else None
 
         # 2) Lê ZIP do banco
-        zip_bytes = get_zip_bytes_from_db(upload_id, db)
-        if not zip_bytes:
-            raise FileNotFoundError("Arquivo não encontrado no banco")
+        # zip_bytes = get_zip_bytes_from_db(upload_id, db)
+        # if not zip_bytes:
+        #    raise FileNotFoundError("Arquivo não encontrado no banco")
+        upload = db.query(Upload).filter(Upload.id == upload_id).first()
+        if not upload:
+            raise HTTPException(status_code=404, detail="Upload não encontrado")
+        
+        with open(upload.filepath, "rb") as f:
+            zip_bytes = f.read()
+
+        
 
         # 3) Passa parâmetros para a análise:
         # - Se tem imposto pago, deixo a alíquota None para a análise não forçar um "pago" artificial.
