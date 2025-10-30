@@ -5,10 +5,11 @@ from typing import List
 from ..db import get_session
 from ..models.clients import Client
 
-router = APIRouter(
-    tags=["Clients"]
-)
+router = APIRouter()
 
+@router.get("/")
+def clients_root():
+    return {"status": "ok"}
 # 🧾 Schemas de entrada e saída
 class ClientCreate(BaseModel):
     name: str
