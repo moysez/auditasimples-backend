@@ -4,8 +4,32 @@ from app.db import get_db
 from app.models import User
 from app.schemas import LoginRequest, TokenResponse
 from app.utils import verify_password, create_access_token
+import os
 
 router = APIRouter()
+
+# ✔ Login mínimo, estável e sem dependências externas.
+#   Em produção você pode trocar por JWT depois; por enquanto mantemos
+#   compatibilidade com o front (access_token em JSON).
+
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASS = os.getenv("ADMIN_PASS", "admin123")
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@router.post("/login")
+def login(payload: LoginRequest):
+    if payload.username == ADMIN_USER and payload.password == ADMIN_PASS:
+        # Retornamos um token estático apenas para manter o fluxo.
+        return {"access_token": "auditasimples-dev-token", "token_type": "bearer"}
+    raise HTTPException(status_code=401, detail="Credenciais inválidas")
+
+@router.get("/me")
+def me():
+    # Endpoint simples para testes rápidos no front.
+    return {"username": ADMIN_USER}
 
 # ============================================================
 # 🔐 LOGIN DE USUÁRIO (email OU username)
