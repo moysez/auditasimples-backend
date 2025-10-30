@@ -1,47 +1,96 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
-from sqlalchemy.orm import declarative_base, relationship
-from datetime import datetime
-
-Base = declarative_base()
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float, func
+from sqlalchemy.orm import relationship
+from app.db import Base
 
 # ============================================================
-# 👤 Usuários (autenticação)
+# 👤 MODELO DE USUÁRIO
 # ============================================================
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(100), unique=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    username = Column(String(50), unique=True, index=True, nullable=True)
+    email = Column(String(120), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True)
+    role = Column(String(50), default="user")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    uploads = relationship("Upload", back_populates="user")
+    # Relacionamentos (exemplo)
+    uploads = relationship("Upload", back_populates="user", cascade="all, delete")
+    audit_logs = relationship("AuditLog", back_populates="user", cascade="all, delete")
+
 
 # ============================================================
-# 🏢 Clientes / Empresas
+# 🧾 MODELO DE CLIENTES
 # ============================================================
 class Client(Base):
     __tablename__ = "clients"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False)
-    cnpj = Column(String(18), unique=True, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    name = Column(String(100), nullable=False)
+    document = Column(String(20), unique=True, nullable=False)  # CNPJ ou CPF
+    email = Column(String(120))
+    phone = Column(String(20))
+    address = Column(String(255))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    uploads = relationship("Upload", back_populates="client")
 
 # ============================================================
-# 📂 Uploads (ou arquivos locais registrados)
+# 🏢 MODELO DE EMPRESAS
+# ============================================================
+class Company(Base):
+    __tablename__ = "companies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    corporate_name = Column(String(255), nullable=False)
+    trade_name = Column(String(255))
+    cnpj = Column(String(20), unique=True, nullable=False)
+    regime = Column(String(50))  # Simples, Lucro Presumido etc.
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# ============================================================
+# 📚 DICIONÁRIO DE PRODUTOS / NCM / CFOP
+# ============================================================
+class Dictionary(Base):
+    __tablename__ = "dictionary"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ncm = Column(String(20), index=True)
+    cfop = Column(String(20))
+    cst = Column(String(10))
+    description = Column(Text)
+    tax_type = Column(String(50))
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+# ============================================================
+# 📤 UPLOADS (NF-e, NFC-e, SAT)
 # ============================================================
 class Upload(Base):
     __tablename__ = "uploads"
 
     id = Column(Integer, primary_key=True, index=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    filename = Column(String(255), nullable=False)
-    filepath = Column(Text, nullable=False)
-    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    filename = Column(String(255))
+    filepath = Column(String(255))
+    filetype = Column(String(50))
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+    user_id = Column(Integer, ForeignKey("users.id"))
 
-    client = relationship("Client", back_populates="uploads")
     user = relationship("User", back_populates="uploads")
+
+
+# ============================================================
+# 🧮 LOG DE AUDITORIAS / AÇÕES
+# ============================================================
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    action = Column(String(100))
+    details = Column(Text)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="audit_logs")
