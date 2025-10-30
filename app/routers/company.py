@@ -5,9 +5,11 @@ from ..db import get_session
 from ..models.company import Company
 from ..models.clients import Client
 
-router = APIRouter(
-    tags=["Companies"]
-)
+router = APIRouter()
+
+@router.get("/")
+def company_root():
+    return {"status": "ok"}
 
 # 📌 Criar empresa vinculada a um cliente
 @router.post("/", response_model=dict)
