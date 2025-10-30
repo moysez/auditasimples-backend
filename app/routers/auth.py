@@ -1,91 +1,94 @@
 import os
-import logging
-from fastapi import APIRouter, HTTPException, Form, Depends
-from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
 import jwt
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, status, Form
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 
-from ..db import get_session
-from app.models import User
+from app.db import get_session
+from app.models import User  # se não existir, posso te ajudar a criar o modelo
 
-# ------------------------------------------------------------
-# ⚙️ Configuração geral
-# ------------------------------------------------------------
-router = APIRouter(tags=["Autenticação"])
+router = APIRouter(tags=["Auth"])
 
-logger = logging.getLogger("auditassimples.auth")
+# ============================================================
+# 🔐 Configurações JWT
+# ============================================================
+
+SECRET_KEY = os.getenv("JWT_SECRET", "supersecretkey")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 dia
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-SECRET_KEY = os.getenv("JWT_SECRET", "chave-secreta-supersegura")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 240
+# ============================================================
+# 🧠 Utilitários
+# ============================================================
 
-IS_RENDER = os.getenv("ENV", "local").lower() == "render"
-
-
-# ------------------------------------------------------------
-# 🔐 Funções auxiliares
-# ------------------------------------------------------------
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
+# ============================================================
+# 👤 Login do usuário
+# ============================================================
 
-# ------------------------------------------------------------
-# 🧾 Login de usuário
-# ------------------------------------------------------------
 @router.post("/login")
-def login(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_session)):
+def login(
+    username: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_session)
+):
+    user = db.query(User).filter(User.username == username).first()
+
+    # ⚠️ Cria um usuário admin padrão se não existir
+    if not user and username == "admin":
+        hashed_pw = get_password_hash("admin")
+        user = User(username="admin", password_hash=hashed_pw)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    if not user or not verify_password(password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuário ou senha incorretos."
+        )
+
+    access_token = create_access_token({"sub": user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+# ============================================================
+# 🔎 Obter usuário atual via JWT
+# ============================================================
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
-        user = db.query(User).filter(User.username == username).first()
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
+        return {"username": username}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expirado")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
 
-        if not user:
-            raise HTTPException(status_code=401, detail="Usuário não encontrado")
+# ============================================================
+# 🔒 Rota de verificação opcional
+# ============================================================
 
-        if not verify_password(password, user.password_hash):
-            raise HTTPException(status_code=401, detail="Senha incorreta")
-
-        token = create_access_token({"sub": username})
-        logger.info(f"✅ Login bem-sucedido: {username}")
-
-        return JSONResponse(content={
-            "access_token": token,
-            "token_type": "bearer",
-            "user": {"id": user.id, "username": user.username},
-            "environment": "Render" if IS_RENDER else "Local"
-        })
-
-    except Exception as e:
-        logger.exception("Erro inesperado no login")
-        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
-
-
-# ------------------------------------------------------------
-# 👤 Criação de usuário (para testes locais)
-# ------------------------------------------------------------
-@router.post("/register")
-def register_user(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_session)):
-    """Endpoint opcional — útil apenas em ambiente local para criar usuários."""
-    if IS_RENDER:
-        raise HTTPException(status_code=403, detail="Criação de usuários desabilitada no ambiente de produção.")
-
-    from app.models import User
-
-    if db.query(User).filter(User.username == username).first():
-        raise HTTPException(status_code=400, detail="Usuário já existe")
-
-    hashed_password = pwd_context.hash(password)
-    user = User(username=username, password_hash=hashed_password)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    logger.info(f"👤 Usuário criado: {username}")
-    return {"message": "Usuário criado com sucesso", "user_id": user.id}
+@router.get("/verify")
+def verify_token(current_user: dict = Depends(get_current_user)):
+    return {"status": "ok", "user": current_user["username"]}
