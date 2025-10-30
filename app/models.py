@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, LargeBinary, func, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func, JSON
 from datetime import datetime
 from sqlalchemy.orm import relationship
 from .db import Base
@@ -22,21 +22,20 @@ class Client(Base):
     cnpj = Column(String(20), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # ✅ Relação reversa com Uploads
+    # Relação reversa
     uploads = relationship("Upload", back_populates="client")
 
 
-# 📤 Upload de Arquivos ZIP
+# 📂 Upload (agora apenas registra o caminho do arquivo local)
 class Upload(Base):
     __tablename__ = "uploads"
 
     id = Column(Integer, primary_key=True, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
     filename = Column(String, nullable=False)
-    filepath = Column(LargeBinary, nullable=False)
+    filepath = Column(String, nullable=False)   # ⬅️ ALTERADO (era LargeBinary)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # ✅ Relação bidirecional com Client
     client = relationship("Client", back_populates="uploads")
 
 
