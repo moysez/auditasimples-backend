@@ -1,95 +1,74 @@
-from fastapi import FastAPI, APIRouter, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from fastapi.responses import FileResponse
-# 👇 aqui é onde você define o router sem prefixo duplicado
-
-# 📦 Rotas
-from .routers import clients, company, uploads, dashboard, dictionary
-
-# 🔐 Autenticação
-from .routers import auth
-auth_router = auth.router
-
-# ⚙️ Configurações e DB
-from .config import settings
-from .db import Base, engine, get_session
-
-# 🧾 Relatório DOCX
-from app.services.analysis import run_analysis_from_bytes
-from app.services.report_docx import gerar_relatorio_fiscal
-
-# 🪵 Logging
 import logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-)
-logger = logging.getLogger(__name__)
+# Routers principais
+from app.routers import auth, clients, uploads, dashboard, dictionary
 
-# 🧠 Inicializa app
+# Banco de dados
+from app.db import engine, Base
+
+# =========================================
+# 🚀 Configuração inicial da aplicação
+# =========================================
 app = FastAPI(
     title="AuditaSimples API",
+    description="Backend principal para análise fiscal e auditoria do Simples Nacional",
     version="1.0.0",
-    description="API oficial do sistema AuditaSimples"
 )
 
-# 🌐 CORS
+# Criação automática das tabelas (se ainda não existirem)
+Base.metadata.create_all(bind=engine)
+
+# =========================================
+# 🌐 CORS — libera acesso do frontend
+# =========================================
 origins = [
-    "https://auditasimples.io",
-    "https://www.auditasimples.io",
-    "https://api.auditasimples.io",
+    "https://auditassimples.io",
+    "https://www.auditassimples.io",
     "http://localhost:5500",
-    "http://127.0.0.1:5500"
+    "http://127.0.0.1:5500",
+    "http://localhost:8000",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"https://.*\.auditasimples\.io",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-logger.info(f"🌍 CORS habilitado para: {origins}")
+# =========================================
+# 🧭 Configuração de logging
+# =========================================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+)
+logger = logging.getLogger("auditassimples")
 
-# 🧱 Banco de dados
-Base.metadata.create_all(bind=engine)
+# =========================================
+# 🔌 Registro das rotas
+# =========================================
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(clients.router, prefix="/api/clients", tags=["Clients"])
+app.include_router(uploads.router, prefix="/api/uploads", tags=["Uploads"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
+app.include_router(dictionary.router, prefix="/api/dictionary", tags=["Dictionary"])
 
-# 📍 Prefixo de API
-api = APIRouter(prefix="/api")
+logger.info("🟢 Rotas registradas com sucesso:")
+for r in app.routes:
+    if hasattr(r, "path"):
+        logger.info(f"   - {r.path}")
 
-# 📊 Rotas principais
-api.include_router(auth_router, prefix="/auth", tags=["Auth"])
-api.include_router(clients.router, prefix="/clients", tags=["Clients"])
-api.include_router(company.router, prefix="/company", tags=["Company"])
-api.include_router(uploads.router, prefix="/uploads", tags=["Uploads"])
-api.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
-api.include_router(dictionary.router, prefix="/dictionary", tags=["Dictionary"])
+logger.info("✅ FASTAPI inicializado com CORS habilitado para:")
+for origin in origins:
+    logger.info(f"   - {origin}")
 
-# 🩺 Health Check
+# =========================================
+# 🔍 Healthcheck simples
+# =========================================
 @app.get("/health")
-def health():
-    return {"status": "ok", "env": settings.ENV}
-
-# 🧪 Teste de conexão com DB
-@app.get("/db-check")
-def check_db(session: Session = Depends(get_session)):
-    try:
-        with engine.connect() as conn:
-            result = conn.execute("SELECT 1")
-            return {"status": "ok", "result": [row for row in result]}
-    except Exception as e:
-        logger.exception("❌ Erro ao verificar conexão com o banco:")
-        return {"status": "error", "detail": str(e)}
-
-# 📌 Registra o roteador principal
-app.include_router(api)
-
-# 🧭 Log de rotas no console (Render)
-logger.info("📜 ROTAS REGISTRADAS NO FASTAPI:")
-for route in app.routes:
-    logger.info(route.path)
-logger.info("📜 FIM DAS ROTAS")
+def health_check():
+    return {"status": "ok", "message": "AuditaSimples API funcionando corretamente."}
