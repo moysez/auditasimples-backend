@@ -1,7 +1,33 @@
-import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import logging
+from app.db import Base, engine
+from app.routers import auth, uploads, dashboard, dictionary, clients, company
 
+# ============================================================
+# 🚀 CONFIGURAÇÃO INICIAL DO APP
+# ============================================================
+
+# Cria tabelas automaticamente se não existirem
+Base.metadata.create_all(bind=engine)
+
+# Logger global
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+)
+logger = logging.getLogger("auditassimples")
+
+# Inicializa app
+app = FastAPI(
+    title="AuditaSimples API",
+    description="API fiscal e tributária automatizada do AuditaSimples",
+    version="1.0.0"
+)
+
+# ============================================================
+# 🌐 CONFIGURAÇÃO DE CORS
+# ============================================================
 origins = [
     "https://auditassimples.io",
     "https://www.auditassimples.io",
@@ -17,96 +43,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-import logging
-from fastapi.responses import JSONResponse
-from app.db import Base, engine
-Base.metadata.create_all(bind=engine)
-
-# Rotas internas
-from app.routers import clients, company, uploads, dashboard, dictionary, auth
-
-# Configurações de log
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
-)
-logger = logging.getLogger("auditassimples")
+# ============================================================
+# 📦 REGISTRO DOS ROUTERS
+# ============================================================
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(uploads.router, prefix="/api/uploads", tags=["Uploads"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
+app.include_router(dictionary.router, prefix="/api/dictionary", tags=["Dictionary"])
+app.include_router(clients.router, prefix="/api/clients", tags=["Clients"])
+app.include_router(company.router, prefix="/api/company", tags=["Company"])
 
 # ============================================================
-# 🏗️ Inicialização do app
-# ============================================================
-app = FastAPI(
-    title="AuditaSimples API",
-    version="1.0.0",
-    description="Backend para análise e auditoria fiscal do Simples Nacional"
-)
-
-# ============================================================
-# 🌐 CORS
-# ============================================================
-IS_RENDER = os.getenv("ENV", "local").lower() == "render"
-
-if IS_RENDER:
-    origins = [
-        "https://auditassimples.io",
-        "https://www.auditassimples.io"
-    ]
-else:
-    origins = [
-        "http://localhost:5500",
-        "http://127.0.0.1:5500",
-        "http://localhost:8000"
-    ]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-logger.info("✅ FASTAPI inicializado com CORS habilitado para:")
-for o in origins:
-    logger.info(f"   - {o}")
-
-# ============================================================
-# 📦 Registro de Rotas
-# ============================================================
-app.include_router(auth.router, prefix="/api/auth")
-app.include_router(clients.router, prefix="/api/clients")
-app.include_router(company.router, prefix="/api/company")
-app.include_router(uploads.router, prefix="/api/uploads")
-app.include_router(dashboard.router, prefix="/api/dashboard")
-app.include_router(dictionary.router, prefix="/api/dictionary")
-
-logger.info("📡 ROTAS REGISTRADAS NO FASTAPI:")
-for route in app.router.routes:
-    if hasattr(route, "path"):
-        logger.info(f"   - {route.path}")
-
-# ============================================================
-# 🩺 Health Check
+# 🩺 HEALTH CHECK
 # ============================================================
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "environment": "Render" if IS_RENDER else "Local"}
+    return {"status": "ok", "message": "AuditaSimples API funcionando corretamente"}
 
 # ============================================================
-# ⚠️ Tratamento global de erros
+# 🏁 LOG DE INICIALIZAÇÃO
 # ============================================================
-@app.exception_handler(Exception)
-def handle_unexpected_exception(request, exc):
-    logger.exception(f"Erro inesperado: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content={"detail": f"Erro interno do servidor: {str(exc)}"},
-    )
-
-# ============================================================
-# 🚀 Execução (para testes locais)
-# ============================================================
-if __name__ == "__main__":
-    import uvicorn
-    logger.info("🧩 Executando AuditaSimples localmente...")
-    uvicorn.run("app.main:app", host="0.0.0.0", port=10000, reload=True)
+logger.info("✅ AuditaSimples API iniciada com sucesso.")
