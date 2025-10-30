@@ -3,6 +3,8 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from app.db import Base, engine
+Base.metadata.create_all(bind=engine)
 
 # Rotas internas
 from app.routers import clients, company, uploads, dashboard, dictionary, auth
