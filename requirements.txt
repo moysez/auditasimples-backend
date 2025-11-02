@@ -1,41 +1,7 @@
-# ============================
-# 📦 Framework principal
-# ============================
-fastapi==0.114.2
+fastapi==0.115.0
 uvicorn[standard]==0.30.6
-
-# ============================
-# 🧱 Banco de dados
-# ============================
 SQLAlchemy==2.0.35
-psycopg[binary]
 psycopg2-binary==2.9.9
-PyJWT==2.9.0
-
-# ============================
-# 🔐 Autenticação e segurança
-# ============================
-python-jose==3.3.0
-passlib[bcrypt]==1.7.4
-
-# ============================
-# 🧰 Utilitários
-# ============================
 python-multipart==0.0.9
-pydantic==2.9.2
-pydantic-settings==2.4.0
-python-dotenv==1.0.1
-loguru==0.7.2
-lxml==5.3.0
-
-# ============================
-# 📧 AI
-# ============================
+PyJWT==2.9.0
 rapidfuzz==3.9.6
-
-python-docx
-
-# ============================
-# 📧 Email (opcional)
-# ============================
-fastapi-mail==1.4.1
