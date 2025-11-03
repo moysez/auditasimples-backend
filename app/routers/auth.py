@@ -6,7 +6,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.db import get_session
-from app.models import User
+from app.models import User as UserModel
 from app.schemas import LoginRequest, TokenResponse
 from app.config import settings  # usa a classe Settings do config.py
 
