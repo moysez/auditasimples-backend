@@ -9,16 +9,10 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(50), unique=True, index=True, nullable=True)
-    email = Column(String(120), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
+    username = Column(String(50), unique=True, index=True, nullable=False)  # ✅ campo correto
+    hashed_password = Column(String(128), nullable=False)
     is_active = Column(Boolean, default=True)
-    role = Column(String(50), default="user")
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    # Relacionamentos (exemplo)
-    uploads = relationship("Upload", back_populates="user", cascade="all, delete")
-    audit_logs = relationship("AuditLog", back_populates="user", cascade="all, delete")
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 # ============================================================
