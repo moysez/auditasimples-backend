@@ -10,7 +10,7 @@ from app.models import User
 from app.schemas import LoginRequest, TokenResponse
 from app.config import settings  # usa a classe Settings do config.py
 
-router = APIRouter(prefix="/api/auth", tags=["Auth"])
+router = APIRouter(tags=["Auth"])
 security = HTTPBearer(auto_error=False)
 
 # ============================================================
