@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_session
-from app.models import User  # ⚠️ aqui é o User do app.models
+from app.models import User as UserModel
 from app.schemas import LoginRequest, TokenResponse
 
 router = APIRouter(tags=["Auth"])
@@ -35,7 +35,8 @@ def create_token(sub: str) -> str:
 @router.post("/login", response_model=TokenResponse)
 def login(data: LoginRequest, db: Session = Depends(get_session)):
     # ⚠️ Aqui garantimos que User vem do models
-    user = db.query(User).filter(User.username == data.username).first()
+    user = db.query(UserModel).filter(UserModel.username == data.username).first()
+
 
     if not user:
         raise HTTPException(status_code=401, detail="Usuário não encontrado")
@@ -62,7 +63,7 @@ def get_current_user(
     except Exception:
         raise HTTPException(status_code=401, detail="Token inválido")
 
-    user = db.query(User).filter(User.username == payload.get("sub")).first()
+    user = db.query(UserModel).filter(UserModel.username == payload.get("sub")).first()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Usuário inativo")
 
