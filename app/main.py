@@ -39,10 +39,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],      # OPTIONS é tratado automaticamente
+    allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # ============================================================
 # 📦 ROTAS
 # ============================================================
