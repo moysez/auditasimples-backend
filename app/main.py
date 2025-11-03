@@ -1,33 +1,22 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import logging
 
-from app.db import Base, engine
-from app.routers import auth, uploads, dashboard, dictionary, clients, company
+from app.routers import auth
 
 # ============================================================
-# 🚀 CONFIGURAÇÃO INICIAL DO APP
+# 🚀 CRIAÇÃO DO APP
 # ============================================================
-
-# Garante as tabelas
-Base.metadata.create_all(bind=engine)
-
-# Logger
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
-)
-logger = logging.getLogger("auditassimples")
 
 app = FastAPI(
     title="AuditaSimples API",
-    description="API fiscal e tributária do AuditaSimples",
+    description="API fiscal e tributária do AuditaSimples (versão simples, sem banco)",
     version="1.0.0",
 )
 
 # ============================================================
-# 🌐 CORS (somente os domínios que você usa)
+# 🌐 CORS
 # ============================================================
+
 origins = [
     "https://auditasimples.io",
     "https://www.auditasimples.io",
@@ -42,21 +31,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 # ============================================================
 # 📦 ROTAS
 # ============================================================
-app.include_router(auth.router,       prefix="/api/auth",       tags=["Auth"])
-app.include_router(uploads.router,    prefix="/api/uploads",    tags=["Uploads"])
-app.include_router(dashboard.router,  prefix="/api/dashboard",  tags=["Dashboard"])
-app.include_router(dictionary.router, prefix="/api/dictionary", tags=["Dictionary"])
-app.include_router(clients.router,    prefix="/api/clients",    tags=["Clients"])
-app.include_router(company.router,    prefix="/api/company",    tags=["Company"])
+
+# /api/auth/login
+app.include_router(auth.router, prefix="/api/auth")
+
 
 # ============================================================
 # 🩺 HEALTH CHECK
 # ============================================================
+
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "message": "AuditaSimples API funcionando corretamente"}
-
-logger.info("✅ AuditaSimples API iniciada com sucesso.")
+    return {"status": "ok", "message": "AuditaSimples API funcionando corretamente (sem banco)"}
