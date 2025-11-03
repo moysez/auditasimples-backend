@@ -1,66 +1,20 @@
-from datetime import datetime, timedelta
-import hashlib
-import jwt
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-
-from app.config import settings
-from app.db import get_session
-from app.models import User as UserModel
+from fastapi import APIRouter, HTTPException
 from app.schemas import LoginRequest, TokenResponse
 
 router = APIRouter(tags=["Auth"])
-security = HTTPBearer(auto_error=False)
-
 
 # ============================================================
-# 🔐 UTILITÁRIOS
+# 🔐 LOGIN ÚNICO (admin fixo)
 # ============================================================
-def _hash(pwd: str) -> str:
-    return hashlib.sha256(pwd.encode("utf-8")).hexdigest()
 
+ADMIN_USER = "admin"
+ADMIN_PASS = "102030"
 
-def create_token(sub: str) -> str:
-    expire = datetime.utcnow() + timedelta(minutes=60)
-    payload = {"sub": sub, "exp": expire}
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
-
-
-# ============================================================
-# 🧠 LOGIN
-# ============================================================
 @router.post("/login", response_model=TokenResponse)
-def login(data: LoginRequest, db: Session = Depends(get_session)):
-    user = db.query(UserModel).filter(UserModel.username == data.username).first()
+def login(data: LoginRequest):
+    """Autenticação fixa sem banco de dados"""
+    if data.username != ADMIN_USER or data.password != ADMIN_PASS:
+        raise HTTPException(status_code=401, detail="Usuário ou senha inválidos")
 
-    if not user:
-        raise HTTPException(status_code=401, detail="Usuário não encontrado")
-
-    if user.hashed_password != _hash(data.password):
-        raise HTTPException(status_code=401, detail="Senha incorreta")
-
-    token = create_token(user.username)
-    return TokenResponse(access_token=token, token_type="bearer")
-
-
-# ============================================================
-# 👤 USUÁRIO ATUAL
-# ============================================================
-def get_current_user(
-    creds: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_session),
-) -> UserModel:
-    if not creds:
-        raise HTTPException(status_code=401, detail="Não autenticado")
-
-    try:
-        payload = jwt.decode(creds.credentials, settings.SECRET_KEY, algorithms=["HS256"])
-    except Exception:
-        raise HTTPException(status_code=401, detail="Token inválido")
-
-    user = db.query(UserModel).filter(UserModel.username == payload.get("sub")).first()
-    if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="Usuário inativo")
-
-    return user
+    # Retorna token simbólico (apenas para compatibilidade)
+    return TokenResponse(access_token="dummy-token", token_type="bearer")
