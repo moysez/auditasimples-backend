@@ -57,7 +57,7 @@ def login(data: LoginRequest, db: Session = Depends(get_session)):
 def get_current_user(
     creds: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_session),
-) -> User:
+) -> UserModel:
     """
     Valida token JWT e retorna o usuário autenticado.
     """
