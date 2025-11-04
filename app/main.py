@@ -38,7 +38,12 @@ app.add_middleware(
 
 # /api/auth/login
 app.include_router(auth.router, prefix="/api/auth")
-
+# app.include_router(auth.router,       prefix="/api/auth",       tags=["Auth"])
+app.include_router(uploads.router,    prefix="/api/uploads",    tags=["Uploads"])
+app.include_router(dashboard.router,  prefix="/api/dashboard",  tags=["Dashboard"])
+app.include_router(dictionary.router, prefix="/api/dictionary", tags=["Dictionary"])
+app.include_router(clients.router,    prefix="/api/clients",    tags=["Clients"])
+app.include_router(company.router,    prefix="/api/company",    tags=["Company"])
 
 # ============================================================
 # 🩺 HEALTH CHECK
