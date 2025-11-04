@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from app.routers import auth
+from app.routers import auth, uploads, dashboard, dictionary, clients, company
 
 # ============================================================
 # 🚀 CRIAÇÃO DO APP
