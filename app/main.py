@@ -17,10 +17,11 @@ app = FastAPI(
 # ============================================================
 
 origins = [
-    "https://auditasimples.io",
-    "https://www.auditasimples.io",
-    "http://localhost:5500",
-    "http://127.0.0.1:5500",
+    "https://auditasimples.io",         # front-end principal
+    "https://www.auditasimples.io",     # se usar www
+    "https://api.auditasimples.io",     # subdomínio da API (precisa estar liberado)
+    "http://localhost:5500",            # dev local
+    "http://127.0.0.1:5500"             # dev local
 ]
 
 app.add_middleware(
@@ -30,6 +31,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # ============================================================
 # 📦 ROTAS
