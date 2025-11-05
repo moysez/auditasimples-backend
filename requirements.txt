@@ -8,3 +8,4 @@ SQLAlchemy>=2.0.0
 psycopg2-binary
 rapidfuzz
 python-docx
+pymysql
