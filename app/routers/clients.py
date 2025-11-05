@@ -7,10 +7,9 @@ from ..models.clients import Client
 
 router = APIRouter()
 
-@router.get("/")
-def clients_root():
-    return {"status": "ok"}
+# ============================================================
 # 🧾 Schemas de entrada e saída
+# ============================================================
 class ClientCreate(BaseModel):
     name: str
     cnpj: str
@@ -23,10 +22,12 @@ class ClientOut(BaseModel):
     class Config:
         orm_mode = True
 
+
+# ============================================================
 # 📌 Criar cliente
+# ============================================================
 @router.post("/", response_model=ClientOut)
 def create_client(payload: ClientCreate, db: Session = Depends(get_session)):
-    # Verifica se já existe cliente com esse CNPJ
     existing = db.query(Client).filter(Client.cnpj == payload.cnpj).first()
     if existing:
         raise HTTPException(status_code=400, detail="Empresa já cadastrada")
@@ -35,16 +36,21 @@ def create_client(payload: ClientCreate, db: Session = Depends(get_session)):
     db.add(client)
     db.commit()
     db.refresh(client)
-
     return client
 
-# 📌 Listar clientes
+
+# ============================================================
+# 📋 Listar clientes
+# ============================================================
 @router.get("/", response_model=List[ClientOut])
 def list_clients(db: Session = Depends(get_session)):
     clients = db.query(Client).all()
     return clients
 
-# 📌 Buscar cliente por ID
+
+# ============================================================
+# 🔍 Buscar cliente por ID
+# ============================================================
 @router.get("/{client_id}", response_model=ClientOut)
 def get_client(client_id: int, db: Session = Depends(get_session)):
     client = db.query(Client).get(client_id)
@@ -52,7 +58,10 @@ def get_client(client_id: int, db: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     return client
 
-# 📌 Deletar cliente
+
+# ============================================================
+# ❌ Deletar cliente
+# ============================================================
 @router.delete("/{client_id}")
 def delete_client(client_id: int, db: Session = Depends(get_session)):
     client = db.query(Client).get(client_id)
